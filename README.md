@@ -415,6 +415,33 @@ Upload required documents for verification:
 - **Email**: info@vijayalakshmiboyarmatrimony.com (for user inquiries)
 - **Phone**: +91 7639150271
 
+## 🆕 RECENT UPDATES (March 2026)
+
+### Admin Chat - All Users Tab (NEW!)
+Admin can now initiate chat with any registered user:
+- **Two Tabs**: "Conversations" (existing chats) + "All Users" (new)
+- **Start New Chat**: Admin can select any user from "All Users" tab
+- **Use Case**: Contact users about payment issues, verification queries
+- **Location**: Admin Panel → Client Chat
+
+### Gallery Photos - View Button (NEW!)
+Admin can now view images in full size before Approve/Reject:
+- **View Button**: Added next to Approve/Reject in Gallery Photos
+- **Full Size Preview**: Opens dialog with enlarged image
+- **Better Review**: Small images can be clearly examined
+
+### Production Deployment
+**You now have 2 working URLs:**
+- **Cloudflare default** (for testing): https://viji-marimony-deploy.pages.dev
+- **Your custom domain** (main site): https://vijayalakshmiboyarmatrimony.com
+- **Backend API**: https://viji-marimony-new.onrender.com
+- **Database**: AWS RDS PostgreSQL
+- **Auto Deploy**: GitHub linked to Cloudflare for automatic deployment
+
+### Bug Fixes
+- Fixed admin login 404 error - endpoint URL corrected to `/api/auth/admin/login`
+- Fixed chat image URL - production environment variable used
+
 ## 🆕 RECENT UPDATES (February 2025)
 
 ### Profile Photo Zoom & Pan Adjustment (NEW!)
