@@ -30,6 +30,33 @@ const authenticateAdmin = async (c, next) => {
   }
 };
 
+// Seed admin (for first time setup)
+adminRoutes.post('/seed', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email, password, name, phone, secret } = body;
+    
+    // Simple secret check
+    if (secret !== 'viji-matrimony-seed-2026') {
+      return c.json({ error: 'Invalid secret' }, 403);
+    }
+    
+    const prisma = getPrisma();
+    const hashedPassword = await bcrypt.hash(password, 12);
+    
+    const admin = await prisma.admin.upsert({
+      where: { email },
+      update: { password: hashedPassword, name, phone },
+      create: { email, password: hashedPassword, name, phone, role: 'super_admin' }
+    });
+    
+    return c.json({ message: 'Admin created/updated', email: admin.email });
+  } catch (error) {
+    console.error('Seed error:', error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 // Admin login
 adminRoutes.post('/login', async (c) => {
   try {

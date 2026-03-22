@@ -1,31 +1,47 @@
 /**
  * Database connection for PostgreSQL (AWS RDS)
- * Used by Cloudflare Workers with Prisma
+ * Used by Cloudflare Workers with Prisma + pg adapter
  */
 
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
 
 let prisma = null;
+let dbUrl = null;
+
+// Set DATABASE_URL from Cloudflare secrets
+export const setDatabaseUrl = (url) => {
+  dbUrl = url;
+};
 
 // Get DATABASE_URL from environment
 const getDatabaseUrl = () => {
-  // For Cloudflare Workers, check global context
-  if (typeof globalThis !== 'undefined' && globalThis.DATABASE_URL) {
-    return globalThis.DATABASE_URL;
+  if (dbUrl) return dbUrl;
+  if (typeof globalThis !== 'undefined') {
+    return globalThis.DATABASE_URL || process.env.DATABASE_URL;
   }
-  // For Node.js/Express
   return process.env.DATABASE_URL;
 };
 
 export const createPrismaClient = () => {
-  return new PrismaClient({
-    datasources: {
-      db: {
-        url: getDatabaseUrl(),
-      },
-    },
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  const connectionString = getDatabaseUrl();
+  
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
+  }
+  
+  // Create pg pool
+  const pool = new pg.Pool({ 
+    connectionString,
+    ssl: { rejectUnauthorized: false }
   });
+  
+  // Create adapter
+  const adapter = new PrismaPg(pool);
+  
+  // Create Prisma client with adapter
+  return new PrismaClient({ adapter });
 };
 
 // Singleton pattern for Prisma client
@@ -44,4 +60,4 @@ export const closePrisma = async () => {
   }
 };
 
-export default { getPrisma, closePrisma };
+export default { getPrisma, closePrisma, setDatabaseUrl };

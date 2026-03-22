@@ -81,6 +81,38 @@ lookupRoutes.get('/habits', (c) => {
   });
 });
 
+// Get cities
+lookupRoutes.get('/cities', (c) => {
+  const state = c.req.query('state');
+  const cities = {
+    'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli', 'Vellore', 'Erode', 'Thoothukudi', 'Dindigul'],
+    'Kerala': ['Thiruvananthapuram', 'Kochi', 'Kozhikode', 'Thrissur', 'Kollam', 'Palakkad', 'Alappuzha', 'Kannur'],
+    'Karnataka': ['Bengaluru', 'Mysuru', 'Hubli-Dharwad', 'Mangalore', 'Belgaum', 'Bellary', 'Tumkur', 'Shimoga'],
+    'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Kurnool', 'Rajahmundry', 'Kadapa', 'Anantapur'],
+    'Telangana': ['Hyderabad', 'Warangal', 'Secunderabad', 'Karimnagar', 'Khammam', 'Ramagundam', 'Nizamabad'],
+    'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Thane', 'Nashik', 'Aurangabad', 'Solapur', 'Kolhapur'],
+    'Delhi': ['New Delhi', 'Noida', 'Gurgaon', 'Faridabad', 'Ghaziabad'],
+    'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar', 'Jamnagar', 'Junagadh'],
+    'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Asansol', 'Siliguri', 'Malda', 'Bardhaman'],
+    'Other': ['Other']
+  };
+  const stateCities = state && cities[state] ? cities[state] : Object.values(cities).flat();
+  return c.json({ cities: stateCities.map(name => ({ name })) });
+});
+
+// Get subcastes
+lookupRoutes.get('/subcastes', (c) => {
+  return c.json({
+    subCastes: [
+      { name: 'Vijaya' }, { name: 'Vijaya Raman' }, { name: 'Vijaya Gounder' },
+      { name: 'Boya' }, { name: 'Boyar' }, { name: 'Telaga' },
+      { name: 'Kalinga' }, { name: 'Kshatriya' }, { name: 'Reddy' },
+      { name: 'Naidu' }, { name: 'Mudaliar' }, { name: 'Agamudayar' },
+      { name: 'Other' }
+    ]
+  });
+});
+
 // Get raasi (moon signs)
 lookupRoutes.get('/raasi', (c) => {
   return c.json({

@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { compress } from 'hono/compress';
+// import { compress } from 'hono/compress';
 
 // Import route handlers
 import authRoutes from './routes/auth.js';
@@ -20,7 +20,19 @@ import adminRoutes from './routes/admin.js';
 import paymentRoutes from './routes/payments.js';
 import chatRoutes from './routes/chat.js';
 
+// Import database URL setter
+import { setDatabaseUrl } from './lib/db.js';
+
 const app = new Hono();
+
+// Initialize database URL from env
+app.use('*', async (c, next) => {
+  // DATABASE_URL is available as env.DATABASE_URL in Cloudflare Workers
+  if (c.env && c.env.DATABASE_URL) {
+    setDatabaseUrl(c.env.DATABASE_URL);
+  }
+  await next();
+});
 
 // Middleware
 app.use('*', logger());
@@ -30,7 +42,7 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'admin-token', 'x-admin-token', 'x-admin-user'],
 }));
-app.use('*', compress());
+// app.use('*', compress());
 
 // Health check
 app.get('/', (c) => {

@@ -5,8 +5,8 @@ const RealTimeContext = createContext();
 
 // Get API base URL
 const getApiBaseUrl = () => {
-  const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5001';
-  return backendUrl;
+  const backendUrl = process.env.REACT_APP_API_URL || 'https://viji-marimony-new.onrender.com';
+  return backendUrl.replace('/api', '');
 };
 
 export const useRealTime = () => {
