@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2018",
+    "baseUrl": ".",
+    "paths": {
+      "*": ["*"]
+    },
+    "checkJs": false,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": false
+  },
+  "include": ["**/*.js"],
+  "exclude": ["node_modules", "frontend"]
+}

@@ -1,0 +1,16 @@
+.watermark-preview {
+    position: relative;
+    overflow: hidden;
+}
+
+.watermark-preview::after {
+    content: attr(data-watermark);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 48px;
+    color: rgba(0,0,0,0.1);
+    white-space: nowrap;
+    pointer-events: none;
+}

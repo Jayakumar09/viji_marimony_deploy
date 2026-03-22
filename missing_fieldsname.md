@@ -1,0 +1,4 @@
+Personal (basic fields) missing fields are 1.age(calculate after enter from date of birth),2.community(dropdown menu),3.subCaste(dropdown menu),4.weight, 5.email, 6.custom_id (place below profile image), 6.profession(dropdown menu)
+FAMILY INFORMATION  missing fields are 1.fatherName , 2.fatherOccupation(dropdown menu), 3.fatherCaste(dropdown menu), 4.motherName,5.motherOccupation(dropdown menu),6.motherCaste(dropdown menu)
+Subscription not showing in profile page provide proper menu default is free tier
+dropdown menu -get & display the existing stored details from db, if not exist show add option let user enter manually then save in db automatically with existing list of data.

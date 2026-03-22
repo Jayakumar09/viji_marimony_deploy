@@ -1,0 +1,465 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  customId          String?  @unique @map("custom_id") // Custom ID like DHARSHINI_VBM26ID000001
+  email             String   @unique
+  password          String
+  phone             String?  @unique
+  firstName         String   @map("first_name")
+  lastName          String   @map("last_name")
+  gender            String
+  dateOfBirth       DateTime @map("date_of_birth")
+  age               Int
+  community         String   @default("Boyar")
+  subCaste          String?  @map("sub_caste")
+  city              String
+  state             String
+  country           String   @default("India")
+  education         String?
+  profession        String?
+  income            String?
+  maritalStatus     String   @map("marital_status")
+  height            String?  // in cm
+  weight            String?  // in kg
+  complexion        String?
+  physicalStatus    String?  @map("physical_status") // Normal or Physically Challenged
+  
+  // Habit Fields
+  drinkingHabit    String?  @map("drinking_habit") // Never, Occasionally, Regularly
+  smokingHabit    String?  @map("smoking_habit") // Never, Occasionally, Regularly
+  diet            String?  @map("diet") // Vegetarian, Non-Vegitarian, Eggetarian, Vegan
+  
+  profilePhoto      String?  @map("profile_photo")
+  profilePhotoScale Float?  @default(1.0) @map("profile_photo_scale")
+  profilePhotoX     Float?  @default(0) @map("profile_photo_x")
+  profilePhotoY     Float?  @default(0) @map("profile_photo_y")
+  photos            String?  // JSON string for SQLite
+  bio               String?
+  familyValues      String?  @map("family_values")
+  familyType        String?  @map("family_type")
+  familyStatus      String?  @map("family_status")
+  aboutFamily       String?  @map("about_family")
+  isVerified        Boolean  @default(false) @map("is_verified")
+  isPremium         Boolean  @default(false) @map("is_premium")
+  isActive          Boolean  @default(true) @map("is_active")
+  emailVerified     Boolean  @default(false) @map("email_verified")
+  phoneVerified     Boolean  @default(false) @map("phone_verified")
+  photosVerified    Boolean  @default(false) @map("photos_verified")
+  lastLoginAt       DateTime? @map("last_login_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Horoscope Fields
+  raasi             String?  // Moon Sign (Raasi)
+  natchathiram      String?  // Star/Nakshatra
+  dhosam            String?  // Dhosam (Yes/No/-details)
+  birthDate         String?  @map("birth_date") // Birth date for horoscope
+  birthTime         String?  @map("birth_time") // Birth time for horoscope
+  birthPlace        String?  @map("birth_place") // Birth place for horoscope
+
+  // Family Background Fields
+  fatherName        String?  @map("father_name")
+  fatherOccupation  String?  @map("father_occupation")
+  fatherCaste       String?  @map("father_caste")
+  motherName        String?  @map("mother_name")
+  motherOccupation  String?  @map("mother_occupation")
+  motherCaste       String?  @map("mother_caste")
+
+  // Subscription Fields
+  subscriptionTier   String?  @map("subscription_tier") // FREE, STANDARD, PREMIUM, ELITE
+  successFee        Float?   @map("success_fee") // Success fee for premium services
+  subscriptionStart DateTime? @map("subscription_start")
+  subscriptionEnd   DateTime? @map("subscription_end")
+
+  // Verification Status
+  manualVerificationStatus String?  @map("manual_verification_status") // PENDING, APPROVED, REJECTED
+  manualVerificationNotes String?  @map("manual_verification_notes")
+  
+  // Profile Verification Status (for email + phone verification workflow)
+  profileVerificationStatus String? @default("Pending") @map("profile_verification_status") // Pending, Under Admin Review, Profile Verified, Rejected
+  profileVerified Boolean @default(false) @map("profile_verified") // Set by admin after review
+
+  // Relations
+  sentInterests     Interest[] @relation("SentInterests")
+  receivedInterests Interest[] @relation("ReceivedInterests")
+  sentMessages      Message[]  @relation("SentMessages")
+  receivedMessages  Message[]  @relation("ReceivedMessages")
+  photoVerifications PhotoVerification[] @relation("UserPhotos")
+  documents         Document[] @relation("UserDocuments")
+  subscriptions     Subscription[] @relation("UserSubscriptions")
+  userPhotos        UserPhoto[] @relation("UserProfilePhotos")
+  userGallery       UserGalleryImage[] @relation("UserGallery")
+  userDocuments     UserDocument[] @relation("UserNewDocuments")
+  verifications     Verification[] @relation("UserVerifications")
+  payments          Payments[] @relation("UserPayments")
+
+  @@map("users")
+}
+
+// User Photos Model (Profile + Gallery)
+model UserPhoto {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  photoUrl      String   @map("photo_url")
+  isProfilePhoto Boolean  @default(false) @map("is_profile_photo")
+  isApproved    Boolean  @default(false) @map("is_approved")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user          User     @relation("UserProfilePhotos", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_photos")
+}
+
+// User Gallery Model
+model UserGalleryImage {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  imageUrl      String   @map("image_url")
+  caption       String?
+  isPrivate     Boolean  @default(false) @map("is_private")
+  isApproved    Boolean  @default(false) @map("is_approved")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user          User     @relation("UserGallery", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_gallery_images")
+}
+
+// User Documents Model
+model UserDocument {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  documentType  String   @map("document_type") // GOVERNMENT_ID, PASSPORT, DRIVING_LICENSE, etc.
+  documentNumber String? @map("document_number") // Encrypted
+  documentUrl   String?  @map("document_url")
+  isVerified    Boolean  @default(false) @map("is_verified")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user          User     @relation("UserNewDocuments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_documents")
+}
+
+// Verification Model for ID verification details
+model Verification {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  idType        String   @map("id_type") // AADHAAR, PAN, VOTER_ID, DRIVING_LICENSE, PASSPORT
+  encryptedIdNumber String? @map("encrypted_id_number") // AES-256 encrypted full ID number
+  last4Digits   String?  @map("last_4_digits") // Last 4 digits for display
+  idImagePath   String?  @map("id_image_path") // Path to ID proof image
+  selfiePath    String?  @map("selfie_path") // Path to selfie image
+  
+  // AI Verification Results
+  aiStatus      String   @default("PENDING") @map("ai_status") // PENDING, APPROVE, REVIEW, REJECT
+  aiConfidenceScore Float? @map("ai_confidence_score") // 0.0 to 1.0
+  aiRecommendation String? @map("ai_recommendation") // APPROVE, REVIEW, REJECT
+  tamperFlag    Boolean  @default(false) @map("tamper_flag") // True if tampering suspected
+  tamperRiskLevel String? @map("tamper_risk_level") // MINIMAL, LOW, MEDIUM, HIGH
+  formatValid   Boolean  @default(true) @map("format_valid")
+  faceMatchScore Float?  @map("face_match_score") // 0.0 to 1.0
+  aiFlags       String?  @map("ai_flags") // JSON string of AI flags
+  aiSummary     String?  @map("ai_summary") // Human-readable AI summary
+  aiProcessedAt DateTime? @map("ai_processed_at")
+  
+  // Admin Verification
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  verifiedBy    String?  @map("verified_by") // Admin ID who verified
+  verifiedAt    DateTime? @map("verified_at")
+  rejectionReason String? @map("rejection_reason")
+  notes         String?
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user          User     @relation("UserVerifications", fields: [userId], references: [id], onDelete: Cascade)
+  revealLogs    VerificationRevealLog[] @relation("VerificationRevealLogs")
+
+  @@map("verifications")
+}
+
+// Verification Reveal Log - tracks when admin views full ID
+model VerificationRevealLog {
+  id              String   @id @default(cuid())
+  verificationId  String   @map("verification_id")
+  adminId         String   @map("admin_id")
+  ipAddress       String?  @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  revealReason    String?  @map("reveal_reason")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  verification    Verification @relation("VerificationRevealLogs", fields: [verificationId], references: [id], onDelete: Cascade)
+
+  @@map("verification_reveal_logs")
+}
+
+model Document {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  documentType  String   @map("document_type") // GOVERNMENT_ID, ADDRESS_PROOF, FINANCIAL_PROOF, etc.
+  documentUrl   String?  @map("document_url")
+  fileName      String?  @map("file_name") // Original filename
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  rejectedReason String? @map("rejected_reason")
+  reviewedBy    String?  @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user          User     @relation("UserDocuments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model PhotoVerification {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  photoUrl    String   @map("photo_url")
+  photoType   String   @default("PROFILE") @map("photo_type") // PROFILE, PHOTO_GALLERY
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  rejectedReason String? @map("rejected_reason")
+  reviewedBy  String?  @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user        User     @relation("UserPhotos", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("photo_verifications")
+}
+
+model Interest {
+  id         String      @id @default(cuid())
+  senderId   String      @map("sender_id")
+  receiverId String      @map("receiver_id")
+  status     String @default("PENDING")
+  message    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sender   User @relation("SentInterests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedInterests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@map("interests")
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  content    String
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String @default("ADMIN")
+  isActive  Boolean  @default(true) @map("is_active")
+  lastLogin DateTime? @map("last_login")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+model Subscription {
+  id          String           @id @default(cuid())
+  userId      String           @map("user_id")
+  plan        String
+  amount      Float
+  startDate   DateTime         @map("start_date")
+  endDate     DateTime         @map("end_date")
+  status      String @default("ACTIVE")
+  paymentId   String?          @map("payment_id")
+  successFee  Float?           @map("success_fee")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  user        User     @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model CustomCity {
+  id        String   @id @default(cuid())
+  name      String
+  state     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("custom_cities")
+}
+
+model SubCaste {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sub_castes")
+}
+
+// Rasi and Natchathiram mapping for horoscope
+model RasiNakshatra {
+  id        String   @id @default(cuid())
+  rasi      String
+  nakshatra String   @unique
+  rasiOrder Int      @map("rasi_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("rasi_nakshatras")
+}
+
+// Admin Activity Log for audit trail
+model AdminActivityLog {
+  id          String   @id @default(cuid())
+  adminId     String   @map("admin_id")
+  action      String
+  targetUserId String? @map("target_user_id")
+  details     String?  // JSON string for additional details
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([adminId])
+  @@index([targetUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("admin_activity_logs")
+}
+
+// Payments Model - Manual payment tracking (Bank Transfer & UPI)
+model Payments {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  orderId          String    @unique @map("order_id")        // Internal Reference ID
+  phonepeOrderId   String?   @map("phonepe_order_id")       // PhonePe order ID (for backward compatibility)
+  paymentId        String?   @map("payment_id")              // External payment ID
+  amountINR        Float     @map("amount_inr")              // Final amount in INR
+  currency         String    @default("INR")
+  paymentMethod    String    @map("payment_method")          // BANK_TRANSFER, UPI
+  international    Boolean   @default(false)
+  exchangeRate     Float?    @map("exchange_rate")
+  commissionAmount Float?    @map("commission_amount")
+  originalAmount   Float?    @map("original_amount")
+  originalCurrency String?   @map("original_currency")
+  paymentStatus    String    @default("PENDING") @map("payment_status") // PENDING, PENDING_VERIFICATION, SUCCESS, FAILED, REJECTED
+  planId           String?   @map("plan_id")                 // Subscription plan ID (BASIC, PRO, PREMIUM)
+  planName         String?   @map("plan_name")               // Plan name for display
+  planDuration     Int?      @map("plan_duration")           // Plan duration in days
+  referenceId      String?   @map("reference_id")
+  
+  // Manual Payment Fields
+  transactionId    String?   @map("transaction_id")          // User-provided transaction ID
+  paymentProof     String?   @map("payment_proof")           // Screenshot/image URL
+  paymentDate      DateTime? @map("payment_date")            // When user made the payment
+  
+  // Admin Verification Fields
+  verifiedBy       String?   @map("verified_by")             // Admin who verified
+  verifiedAt       DateTime? @map("verified_at")
+  rejectionReason  String?   @map("rejection_reason")
+  adminNotes       String?   @map("admin_notes")
+  
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user             User      @relation("UserPayments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@index([paymentMethod])
+  @@map("payments")
+}
+
+// Admin Notification for payment and other alerts
+model AdminNotification {
+  id          String   @id @default(cuid())
+  type        String                      // PAYMENT_PENDING, PAYMENT_APPROVED, PAYMENT_REJECTED, NEW_USER, etc.
+  title       String
+  message     String
+  paymentId   String?  @map("payment_id")
+  userId      String?  @map("user_id")
+  isRead      Boolean  @default(false) @map("is_read")
+  readAt      DateTime? @map("read_at")
+  readBy      String?  @map("read_by")    // Admin ID who read it
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("admin_notifications")
+}
+
+// Payment Messages - Chat between admin and user about payments
+model PaymentMessage {
+  id          String   @id @default(cuid())
+  paymentId   String   @map("payment_id")
+  senderId    String   @map("sender_id")     // User ID or Admin ID
+  senderType  String   @map("sender_type")   // 'USER' or 'ADMIN'
+  message     String
+  isRead      Boolean  @default(false) @map("is_read")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([paymentId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("payment_messages")
+}
+
+// Chat Messages - General chat between admin and users (no restrictions)
+model ChatMessage {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")       // User ID
+  adminId     String?  @map("admin_id")      // Admin ID (null if user is sender)
+  senderType  String   @map("sender_type")   // 'USER' or 'ADMIN'
+  messageType String   @default("text") @map("message_type") // 'text' or 'image'
+  message     String   // Text message or image URL for image type
+  isRead      Boolean  @default(false) @map("is_read")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([senderType])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("chat_messages")
+}

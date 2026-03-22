@@ -1,0 +1,164 @@
+/* PAGE WRAPPER */
+.verify-page-wrapper {
+  min-height: 100vh;
+  background: #f6f4fb;
+}
+
+/* Wrapper for card centering */
+.verify-wrapper {
+  min-height: calc(100vh - 70px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+/* CARD */
+.verify-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  padding: 28px;
+  border-radius: 14px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+}
+
+.verify-card h2 {
+  margin: 0 0 8px;
+  text-align: center;
+  color: #333;
+  font-size: 22px;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: #777;
+  margin-bottom: 20px;
+}
+
+/* TABS */
+.verify-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.verify-tabs button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #eee;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color: #555;
+  transition: all 0.2s ease;
+}
+
+.verify-tabs button:hover {
+  background: #e0e0e0;
+}
+
+.verify-tabs button.active {
+  background: #7b5cff;
+  color: #fff;
+}
+
+/* INPUTS */
+label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  display: block;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  margin-top: 6px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  background: #fafafa;
+  color: #333;
+}
+
+input:focus {
+  outline: none;
+  border-color: #7b5cff;
+  background: #fff;
+}
+
+input:disabled {
+  background: #f5f5f5;
+  color: #888;
+}
+
+/* BUTTONS */
+.btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: #7b5cff;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #6a4fd6;
+}
+
+.btn-primary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* FALLBACK BUTTON */
+.fallback-btn {
+  background: none;
+  border: none;
+  color: #7b5cff;
+  font-size: 13px;
+  cursor: pointer;
+  margin-bottom: 14px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.fallback-btn:hover {
+  color: #6a4fd6;
+}
+
+/* STATUS */
+.status {
+  text-align: center;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.status.pending {
+  color: #ff9800;
+}
+
+.status.verified {
+  color: #4caf50;
+}
+
+/* TRUST */
+.trust {
+  margin-top: 18px;
+  font-size: 12px;
+  text-align: center;
+  color: #777;
+}
