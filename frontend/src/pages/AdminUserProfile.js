@@ -63,6 +63,7 @@ const AdminUserProfile = () => {
   const [verifyDialog, setVerifyDialog] = useState({ open: false, status: '', notes: '' });
   const [subscriptionDialog, setSubscriptionDialog] = useState({ open: false, plan: 'FREE' });
   const [photoRejectDialog, setPhotoRejectDialog] = useState({ open: false, photoId: null, reason: '' });
+  const [viewPhotoDialog, setViewPhotoDialog] = useState({ open: false, photoUrl: '', photoType: '' });
 
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -779,30 +780,42 @@ const AdminUserProfile = () => {
                             {formatDate(photo.createdAt)}
                           </Typography>
                         </Box>
-                        {photo.url && (!photo.status || photo.status === 'PENDING') && (
-                          <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="success"
-                              fullWidth
-                              startIcon={<Check />}
-                              onClick={() => handleApprovePhoto(photo.id, photo.url, 'PHOTO_GALLERY')}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="error"
-                              fullWidth
-                              startIcon={<Close />}
-                              onClick={() => setPhotoRejectDialog({ open: true, photoId: photo.id, photoUrl: photo.url, photoType: 'PHOTO_GALLERY', reason: '' })}
-                            >
-                              Reject
-                            </Button>
-                          </Box>
-                        )}
+                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            fullWidth
+                            startIcon={<Visibility />}
+                            onClick={() => setViewPhotoDialog({ open: true, photoUrl: photo.url, photoType: 'Gallery Photo' })}
+                          >
+                            View
+                          </Button>
+                          {photo.url && (!photo.status || photo.status === 'PENDING') && (
+                            <>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="success"
+                                fullWidth
+                                startIcon={<Check />}
+                                onClick={() => handleApprovePhoto(photo.id, photo.url, 'PHOTO_GALLERY')}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="error"
+                                fullWidth
+                                startIcon={<Close />}
+                                onClick={() => setPhotoRejectDialog({ open: true, photoId: photo.id, photoUrl: photo.url, photoType: 'PHOTO_GALLERY', reason: '' })}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                        </Box>
                       </CardContent>
                     </Card>
                   </Grid>
@@ -1341,6 +1354,38 @@ const AdminUserProfile = () => {
             Reject Photo
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* View Photo Dialog */}
+      <Dialog 
+        open={viewPhotoDialog.open} 
+        onClose={() => setViewPhotoDialog({ open: false, photoUrl: '', photoType: '' })}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#1e293b', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{viewPhotoDialog.photoType}</span>
+          <IconButton 
+            onClick={() => setViewPhotoDialog({ open: false, photoUrl: '', photoType: '' })}
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ bgcolor: '#0f172a', display: 'flex', justifyContent: 'center', alignItems: 'center', p: 2 }}>
+          {viewPhotoDialog.photoUrl && (
+            <img 
+              src={viewPhotoDialog.photoUrl} 
+              alt="Full view" 
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '70vh', 
+                objectFit: 'contain',
+                borderRadius: '8px'
+              }} 
+            />
+          )}
+        </DialogContent>
       </Dialog>
 
       {/* Snackbar */}

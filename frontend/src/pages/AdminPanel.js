@@ -2359,6 +2359,7 @@ const AdminSettings = () => {
 // Admin Chat Component
 const AdminChat = () => {
   const [conversations, setConversations] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -2366,6 +2367,8 @@ const AdminChat = () => {
   const [sending, setSending] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -2400,6 +2403,31 @@ const AdminChat = () => {
         console.error('Error fetching messages:', error);
         toast.error('Failed to load messages');
       }
+    }
+  };
+
+  // Fetch all users for admin to start chat
+  const fetchAllUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const response = await api.get('/admin/users?limit=100');
+      const usersData = response.data?.users || response.users || [];
+      setAllUsers(usersData);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast.error('Failed to load users');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // Handle tab change
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    setSelectedUser(null);
+    setMessages([]);
+    if (newValue === 1 && allUsers.length === 0) {
+      fetchAllUsers();
     }
   };
 
