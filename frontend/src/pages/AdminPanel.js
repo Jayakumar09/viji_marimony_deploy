@@ -2627,50 +2627,108 @@ const AdminChat = () => {
         {/* Conversations List */}
         <Grid item xs={12} md={4}>
           <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ p: 2, bgcolor: '#8B5CF6', color: 'white' }}>
-              <Typography variant="subtitle1" fontWeight="bold">
-                Conversations ({conversations.length})
-              </Typography>
+            <Box sx={{ bgcolor: '#8B5CF6', color: 'white' }}>
+              <Tabs 
+                value={activeTab} 
+                onChange={handleTabChange}
+                variant="fullWidth"
+                sx={{ 
+                  '& .MuiTab-root': { color: 'white', minHeight: 50 },
+                  '& .Mui-selected': { color: 'white' },
+                  '& .MuiTabs-indicator': { bgcolor: 'white' }
+                }}
+              >
+                <Tab label={`Conversations (${conversations.length})`} />
+                <Tab label={`All Users (${allUsers.length})`} />
+              </Tabs>
             </Box>
             <Divider />
             <List sx={{ flexGrow: 1, overflow: 'auto', p: 0 }}>
-              {conversations.length === 0 ? (
-                <Box p={3} textAlign="center">
-                  <Typography variant="body2" color="textSecondary">
-                    No conversations yet
-                  </Typography>
-                </Box>
-              ) : (
-                conversations.map((conv) => (
-                  <ListItem
-                    key={conv.user.id}
-                    button
-                    onClick={() => handleSelectUser(conv.user)}
-                    sx={{
-                      bgcolor: selectedUser?.id === conv.user.id ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                      borderLeft: selectedUser?.id === conv.user.id ? '4px solid #8B5CF6' : '4px solid transparent'
-                    }}
-                  >
-                    <ListItemIcon>
-                      <Badge badgeContent={conv.unreadCount} color="error">
-                        <Avatar sx={{ bgcolor: '#8B5CF6' }}>
-                          {conv.user.firstName?.charAt(0)}
-                        </Avatar>
-                      </Badge>
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={`${conv.user.firstName} ${conv.user.lastName}`}
-                      secondary={
-                        <Typography variant="caption" noWrap display="block">
-                          {conv.lastMessage?.substring(0, 30)}...
-                        </Typography>
-                      }
-                    />
-                    <Typography variant="caption" color="textSecondary">
-                      {formatTime(conv.lastMessageTime)}
+              {activeTab === 0 ? (
+                // Conversations Tab
+                conversations.length === 0 ? (
+                  <Box p={3} textAlign="center">
+                    <Typography variant="body2" color="textSecondary">
+                      No conversations yet. Users who message you will appear here.
                     </Typography>
-                  </ListItem>
-                ))
+                  </Box>
+                ) : (
+                  conversations.map((conv) => (
+                    <ListItem
+                      key={conv.user.id}
+                      button
+                      onClick={() => handleSelectUser(conv.user)}
+                      sx={{
+                        bgcolor: selectedUser?.id === conv.user.id ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                        borderLeft: selectedUser?.id === conv.user.id ? '4px solid #8B5CF6' : '4px solid transparent'
+                      }}
+                    >
+                      <ListItemIcon>
+                        <Badge badgeContent={conv.unreadCount} color="error">
+                          <Avatar sx={{ bgcolor: '#8B5CF6' }}>
+                            {conv.user.firstName?.charAt(0)}
+                          </Avatar>
+                        </Badge>
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={`${conv.user.firstName} ${conv.user.lastName}`}
+                        secondary={
+                          <Typography variant="caption" noWrap display="block">
+                            {conv.lastMessage?.substring(0, 30)}...
+                          </Typography>
+                        }
+                      />
+                      <Typography variant="caption" color="textSecondary">
+                        {formatTime(conv.lastMessageTime)}
+                      </Typography>
+                    </ListItem>
+                  ))
+                )
+              ) : (
+                // All Users Tab
+                loadingUsers ? (
+                  <Box p={3} textAlign="center">
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : allUsers.length === 0 ? (
+                  <Box p={3} textAlign="center">
+                    <Typography variant="body2" color="textSecondary">
+                      No users found
+                    </Typography>
+                  </Box>
+                ) : (
+                  allUsers.map((user) => (
+                    <ListItem
+                      key={user.id}
+                      button
+                      onClick={() => handleSelectUser(user)}
+                      sx={{
+                        bgcolor: selectedUser?.id === user.id ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                        borderLeft: selectedUser?.id === user.id ? '4px solid #8B5CF6' : '4px solid transparent'
+                      }}
+                    >
+                      <ListItemIcon>
+                        <Avatar sx={{ bgcolor: '#8B5CF6' }}>
+                          {user.firstName?.charAt(0)}
+                        </Avatar>
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={`${user.firstName} ${user.lastName}`}
+                        secondary={
+                          <Typography variant="caption" noWrap display="block">
+                            {user.email}
+                          </Typography>
+                        }
+                      />
+                      <Chip 
+                        label={user.isPremium ? 'Premium' : 'Free'} 
+                        size="small" 
+                        color={user.isPremium ? 'warning' : 'default'}
+                        variant="outlined"
+                      />
+                    </ListItem>
+                  ))
+                )
               )}
             </List>
           </Card>
@@ -2721,7 +2779,7 @@ const AdminChat = () => {
                     const getImageUrl = (url) => {
                       if (!url) return null;
                       if (url.startsWith('http')) return url;
-                      return `http://localhost:5001${url}`;
+                      return `${process.env.REACT_APP_API_URL || ''}${url}`;
                     };
                     
                     return (
