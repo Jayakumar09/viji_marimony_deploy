@@ -45,7 +45,7 @@ const Login = () => {
       // Check if admin login
       if (data.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
         // Admin login
-        const response = await fetch(`${API_BASE_URL}/admin/login`, {
+        const response = await fetch(`${API_BASE_URL}/auth/admin/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: data.email, password: data.password })
