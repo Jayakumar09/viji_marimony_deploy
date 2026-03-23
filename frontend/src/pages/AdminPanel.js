@@ -2035,6 +2035,7 @@ const SubscriptionManagement = () => {
                       <TableCell sx={{ fontWeight: 600 }}>Plan</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Amount</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Start Date</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Expires</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2063,6 +2064,9 @@ const SubscriptionManagement = () => {
                             color={sub.status === 'ACTIVE' ? 'success' : 'error'}
                             size="small"
                           />
+                        </TableCell>
+                        <TableCell>
+                          {sub.startDate ? new Date(sub.startDate).toLocaleDateString('en-IN') : '-'}
                         </TableCell>
                         <TableCell>
                           {sub.endDate ? new Date(sub.endDate).toLocaleDateString('en-IN') : '-'}
