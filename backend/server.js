@@ -19,12 +19,14 @@ const PORT = process.env.PORT || 5001;
 app.set('trust proxy', 1);
 
 // CORS configuration - MUST be before other middleware for preflight requests
-// Support both local development and Cloudflare Pages production
+// Support both local development and production domains
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [
-      'https://your-domain.pages.dev',
-      'https://your-domain.cloudflare-pages.com',
-    ]
+      process.env.FRONTEND_URL, // Dynamic frontend URL
+      'https://vijayalakshmiboyarmatrimony.com',
+      'https://www.vijayalakshmiboyarmatrimony.com',
+    ].filter(Boolean)
   : ['http://localhost:3000', 'http://localhost:3001'];
 
 app.use(cors({
@@ -32,7 +34,7 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('workers.dev') || origin.includes('pages.dev')) {
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('workers.dev') || origin.includes('pages.dev') || origin.includes('onrender.com')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -124,6 +126,13 @@ app.use('/api/profile-pdf', profilePdfRoutes);
 app.use('/api/shared-profile', generateSharedProfile);
 
 // SSE endpoint for real-time updates
+app.options('/api/sse', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.status(200).end();
+});
+
 app.get('/api/sse', (req, res) => {
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
