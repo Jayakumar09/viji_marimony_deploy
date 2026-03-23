@@ -108,6 +108,46 @@ const generateSharedProfile = require('./routes/generateSharedProfile');
 // SSE Service for real-time updates
 const sseService = require('./services/sseService');
 
+// Setup endpoint - Create admin user if not exists (use with caution)
+app.post('/api/setup-admin', async (req, res) => {
+  try {
+    const { secret, email, password, name } = req.body;
+    const setupSecret = process.env.SETUP_SECRET || 'viji-matri-2026';
+    
+    if (secret !== setupSecret) {
+      return res.status(401).json({ error: 'Invalid setup secret' });
+    }
+    
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password || 'Admin@2061979', 12);
+    
+    const admin = await require('./utils/database').prisma.admin.upsert({
+      where: { email: email || 'vijayalakshmijayakumar45@gmail.com' },
+      update: {
+        password: hashedPassword,
+        name: name || 'Vijayalakshmi Admin',
+        role: 'SUPER_ADMIN',
+        isActive: true
+      },
+      create: {
+        email: email || 'vijayalakshmijayakumar45@gmail.com',
+        password: hashedPassword,
+        name: name || 'Vijayalakshmi Admin',
+        role: 'SUPER_ADMIN',
+        isActive: true
+      }
+    });
+    
+    res.json({ 
+      message: 'Admin created/updated successfully',
+      admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role }
+    });
+  } catch (error) {
+    console.error('Setup error:', error);
+    res.status(500).json({ error: 'Setup failed: ' + error.message });
+  }
+});
+
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
