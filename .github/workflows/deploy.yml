@@ -1,44 +1,14 @@
-name: Deploy Full Stack
+name: Deploy Frontend to Cloudflare
 
 on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
 
 jobs:
-  deploy-backend:
-    name: Deploy Backend to Render
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: backend
-        run: npm ci
-
-      - name: Deploy to Render
-        uses: render-deploy-action@v1
-        with:
-          render-cli-token: ${{ secrets.RENDER_API_TOKEN }}
-          service-id: ${{ secrets.RENDER_BACKEND_SERVICE_ID }}
-          # Uncomment to trigger manual redeploy via webhook
-          # webhook-url: ${{ secrets.RENDER_WEBHOOK_URL }}
-
   deploy-frontend:
     name: Deploy Frontend to Cloudflare Pages
     runs-on: ubuntu-latest
-    needs: deploy-backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
