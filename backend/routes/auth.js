@@ -45,6 +45,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // Admin login route - separate endpoint for admin authentication
+// Full path: /api/auth/admin/login
 router.post('/admin/login', async (req, res) => {
   try {
     const { email, password } = req.body;
