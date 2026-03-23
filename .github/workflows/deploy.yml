@@ -64,4 +64,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: viji-marimony-frontend
-          directory: frontend/dist
+          directory: frontend/build
