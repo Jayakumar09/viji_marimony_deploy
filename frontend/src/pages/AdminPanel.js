@@ -1994,7 +1994,7 @@ const SubscriptionManagement = () => {
                             {payment.transactionId || '-'}
                           </TableCell>
                           <TableCell>
-                            {new Date(payment.createdAt).toLocaleDateString('en-IN')}
+                            {new Date(payment.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -2066,10 +2066,10 @@ const SubscriptionManagement = () => {
                           />
                         </TableCell>
                         <TableCell>
-                          {sub.startDate ? new Date(sub.startDate).toLocaleDateString('en-IN') : '-'}
+                          {sub.startDate ? new Date(sub.startDate).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '-'}
                         </TableCell>
                         <TableCell>
-                          {sub.endDate ? new Date(sub.endDate).toLocaleDateString('en-IN') : '-'}
+                          {sub.endDate ? new Date(sub.endDate).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '-'}
                         </TableCell>
                       </TableRow>
                     ))}

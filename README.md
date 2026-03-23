@@ -436,7 +436,22 @@ Admin can now view images in full size before Approve/Reject:
 - **Your custom domain** (main site): https://vijayalakshmiboyarmatrimony.com
 - **Backend API**: https://viji-marimony-new.onrender.com
 - **Database**: AWS RDS PostgreSQL
-- **Auto Deploy**: GitHub linked to Cloudflare for automatic deployment
+- **Auto Deploy**: GitHub Actions linked to both Render (backend) and Cloudflare (frontend)
+
+## 🆕 RECENT UPDATES (March 2026)
+
+### GitHub Actions Auto-Deployment (NEW!)
+- Added `.github/workflows/deploy.yml` for automatic deployment
+- Backend auto-deploys to Render on every push to master
+- Frontend auto-deploys to Cloudflare Pages on every push to master
+- Required secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, RENDER_API_TOKEN, RENDER_BACKEND_SERVICE_ID
+
+### Admin Dashboard Improvements (NEW!)
+- Fixed View button in Photo Approvals section
+- Added "View" button and modal dialog to view photo details
+- Added Start Date column to Subscription & Payment Management
+- Updated date/time format to show both date and time (e.g., "20 Mar 2026, 10:30 AM")
+- Admin now shows correct user count from database (3 users, not mock data)
 
 ### Bug Fixes
 - Fixed admin login 404 error - endpoint URL corrected to `/api/auth/admin/login`
