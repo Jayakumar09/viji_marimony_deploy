@@ -603,6 +603,7 @@ const PhotoApprovals = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [filter, setFilter] = useState('pending');
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [viewDialog, setViewDialog] = useState({ open: false, photo: null });
 
   useEffect(() => {
     fetchPhotos();
@@ -765,26 +766,34 @@ const PhotoApprovals = () => {
                         sx={{ bgcolor: '#f0f0f0' }}
                       />
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                       <Button
-                        fullWidth
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        startIcon={<Visibility />}
+                        onClick={() => setViewDialog({ open: true, photo })}
+                        sx={{ borderRadius: 2, flex: '1 1 auto', minWidth: '80px' }}
+                      >
+                        View
+                      </Button>
+                      <Button
                         variant="contained"
                         color="success"
                         size="small"
                         startIcon={<Check />}
                         onClick={() => handleApprove(photo.id)}
-                        sx={{ borderRadius: 2 }}
+                        sx={{ borderRadius: 2, flex: '1 1 auto', minWidth: '80px' }}
                       >
                         Approve
                       </Button>
                       <Button
-                        fullWidth
                         variant="outlined"
                         color="error"
                         size="small"
                         startIcon={<Close />}
                         onClick={() => setRejectDialog({ open: true, photoId: photo.id, reason: '' })}
-                        sx={{ borderRadius: 2 }}
+                        sx={{ borderRadius: 2, flex: '1 1 auto', minWidth: '80px' }}
                       >
                         Reject
                       </Button>
@@ -794,6 +803,97 @@ const PhotoApprovals = () => {
               </Grid>
             ))}
           </Grid>
+
+          {/* View Photo Dialog */}
+          <Dialog
+            open={viewDialog.open}
+            onClose={() => setViewDialog({ open: false, photo: null })}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Photo Details</span>
+              <IconButton onClick={() => setViewDialog({ open: false, photo: null })} size="small">
+                <Close />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              {viewDialog.photo && (
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <CardMedia
+                      component="img"
+                      image={viewDialog.photo.photoUrl || 'https://via.placeholder.com/400x300'}
+                      alt="Verification photo"
+                      sx={{ width: '100%', height: 'auto', borderRadius: 2, objectFit: 'contain' }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" color="textSecondary">User Name</Typography>
+                      <Typography variant="h6">
+                        {viewDialog.photo.user?.firstName} {viewDialog.photo.user?.lastName}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" color="textSecondary">Email</Typography>
+                      <Typography variant="body1">{viewDialog.photo.user?.email || 'N/A'}</Typography>
+                    </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" color="textSecondary">City</Typography>
+                      <Typography variant="body1">{viewDialog.photo.user?.city || 'N/A'}</Typography>
+                    </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" color="textSecondary">Photo Type</Typography>
+                      <Chip label={viewDialog.photo.photoType} size="small" sx={{ mt: 0.5 }} />
+                    </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" color="textSecondary">Submitted On</Typography>
+                      <Typography variant="body1">
+                        {new Date(viewDialog.photo.createdAt).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" color="textSecondary">Photo ID</Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {viewDialog.photo.id}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<Check />}
+                onClick={() => {
+                  handleApprove(viewDialog.photo.id);
+                  setViewDialog({ open: false, photo: null });
+                }}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Close />}
+                onClick={() => {
+                  setRejectDialog({ open: true, photoId: viewDialog.photo.id, reason: '' });
+                  setViewDialog({ open: false, photo: null });
+                }}
+              >
+                Reject
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => setViewDialog({ open: false, photo: null })}
+              >
+                Close
+              </Button>
+            </DialogActions>
+          </Dialog>
 
           {/* Pagination */}
           {pagination.pages > 1 && (
