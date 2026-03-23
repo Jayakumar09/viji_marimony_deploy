@@ -35,9 +35,11 @@ const AdminPanel = () => {
   const location = useLocation();
 
   // Check for admin access
+  const adminToken = localStorage.getItem('adminToken');
   const adminUser = JSON.parse(localStorage.getItem('adminUser') || 'null');
-  const isAdmin = user?.email === 'vijayalakshmijayakumar45@gmail.com' ||
-                  adminUser?.email === 'vijayalakshmijayakumar45@gmail.com';
+  const isAdmin = adminToken && adminUser && 
+    (user?.email === 'vijayalakshmijayakumar45@gmail.com' ||
+    adminUser?.email === 'vijayalakshmijayakumar45@gmail.com');
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
