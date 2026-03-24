@@ -701,7 +701,7 @@ const PhotoApprovals = () => {
           </FormControl>
           <Button
             variant="outlined"
-            startIcon={<Refresh />}
+            startIcon={<RefreshIcon />}
             onClick={fetchPhotos}
           >
             Refresh
@@ -1047,7 +1047,7 @@ const ProfileVerifications = () => {
         </Box>
         <Button
           variant="outlined"
-          startIcon={<Refresh />}
+          startIcon={<RefreshIcon />}
           onClick={fetchPendingVerifications}
         >
           Refresh
@@ -1358,7 +1358,7 @@ const UserManagement = () => {
             {pagination.total} total users
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<Refresh />} onClick={fetchUsers}>
+        <Button variant="contained" startIcon={<RefreshIcon />} onClick={fetchUsers}>
           Refresh
         </Button>
       </Box>
@@ -1375,7 +1375,7 @@ const UserManagement = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Search color="action" />
+                    <SearchIcon color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -1877,7 +1877,7 @@ const SubscriptionManagement = () => {
         </Box>
         <Button 
           variant="outlined" 
-          startIcon={<Refresh />}
+          startIcon={<RefreshIcon />}
           onClick={fetchData}
           disabled={loading}
         >
