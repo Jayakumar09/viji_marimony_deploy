@@ -263,6 +263,9 @@ const getPaymentStats = async (req, res) => {
  * Approve payment (Admin)
  */
 const approvePayment = async (req, res) => {
+  const { PrismaClient } = require('@prisma/client');
+  const prisma = new PrismaClient();
+  
   try {
     const { id } = req.params;
     const { notes } = req.body;
@@ -279,6 +282,26 @@ const approvePayment = async (req, res) => {
       notes
     });
 
+    // Log the activity
+    if (result.payment) {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId,
+          action: 'PAYMENT_APPROVED',
+          targetUserId: result.payment.userId,
+          details: JSON.stringify({
+            paymentId: id,
+            amount: result.payment.amount,
+            paymentMethod: result.payment.paymentMethod,
+            userEmail: result.payment.user?.email,
+            notes: notes
+          }),
+          ipAddress: req.ip || req.connection?.remoteAddress,
+          userAgent: req.get('User-Agent')
+        }
+      });
+    }
+
     res.json(result);
   } catch (error) {
     console.error('Approve payment error:', error);
@@ -291,6 +314,9 @@ const approvePayment = async (req, res) => {
  * Reject payment (Admin)
  */
 const rejectPayment = async (req, res) => {
+  const { PrismaClient } = require('@prisma/client');
+  const prisma = new PrismaClient();
+  
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -310,6 +336,26 @@ const rejectPayment = async (req, res) => {
       adminId,
       reason
     });
+
+    // Log the activity
+    if (result.payment) {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId,
+          action: 'PAYMENT_REJECTED',
+          targetUserId: result.payment.userId,
+          details: JSON.stringify({
+            paymentId: id,
+            amount: result.payment.amount,
+            paymentMethod: result.payment.paymentMethod,
+            userEmail: result.payment.user?.email,
+            reason: reason
+          }),
+          ipAddress: req.ip || req.connection?.remoteAddress,
+          userAgent: req.get('User-Agent')
+        }
+      });
+    }
 
     res.json(result);
   } catch (error) {

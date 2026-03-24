@@ -229,4 +229,85 @@ router.post('/share-profile-email', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// Get all activity logs (for Activity Logs page)
+router.get('/logs', async (req, res) => {
+  try {
+    const { prisma } = require('../utils/database');
+    const { action, startDate, endDate, limit = 50, offset = 0 } = req.query;
+    
+    // Build where clause
+    const where = {};
+    
+    if (action) {
+      where.action = { contains: action };
+    }
+    
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.createdAt.lte = new Date(endDate);
+      }
+    }
+    
+    // Get logs with admin info
+    const logs = await prisma.adminActivityLog.findMany({
+      where,
+      include: {
+        admin: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit),
+      skip: parseInt(offset)
+    });
+    
+    // Get total count for pagination
+    const total = await prisma.adminActivityLog.count({ where });
+    
+    // Transform logs for frontend display
+    const transformedLogs = logs.map(log => {
+      let details = {};
+      try {
+        details = log.details ? JSON.parse(log.details) : {};
+      } catch (e) {
+        details = { raw: log.details };
+      }
+      
+      // Format action for display
+      let displayAction = log.action.replace(/_/g, ' ').toLowerCase();
+      displayAction = displayAction.charAt(0).toUpperCase() + displayAction.slice(1);
+      
+      return {
+        id: log.id,
+        action: displayAction,
+        actionType: log.action,
+        user: details.userName || details.userEmail || log.admin?.name || log.admin?.email || 'System',
+        targetUserId: log.targetUserId,
+        timestamp: log.createdAt,
+        details: details.raw || `${displayAction} - ${JSON.stringify(details)}`,
+        admin: log.admin ? `${log.admin.name} (${log.admin.email})` : 'System',
+        ipAddress: log.ipAddress
+      };
+    });
+    
+    res.json({ 
+      logs: transformedLogs,
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('Get activity logs error:', error);
+    res.status(500).json({ error: 'Failed to fetch activity logs' });
+  }
+});
+
 module.exports = router;

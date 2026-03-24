@@ -7,14 +7,15 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper, LinearProgress,
   Alert, Snackbar, Tabs, Tab, Menu, MenuItem, Select, FormControl,
-  InputLabel, Tooltip, Switch, FormControlLabel, CircularProgress
+  InputLabel, Tooltip, Switch, FormControlLabel, CircularProgress, TablePagination
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, PhotoCamera, People, TrendingUp, Settings,
-  Logout, Search, Visibility, CheckCircle, Cancel, Refresh, FilterList,
+  Logout, Search as SearchIcon, Visibility, CheckCircle, Cancel, Refresh as RefreshIcon, FilterList,
   MoreVert, Block, Check, Close, Star, Email, Phone, LocationOn,
   CalendarToday, VerifiedUser,PendingActions, History, AttachMoney, Edit, Chat,
-  Send as SendIcon, Delete as DeleteIcon, Image as ImageIcon, Share
+  Send as SendIcon, Delete as DeleteIcon, Image as ImageIcon, Share,
+  Person as PersonIcon, Payment, Login
 } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -2315,71 +2316,316 @@ const SubscriptionManagement = () => {
 const ActivityLogs = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Action types for filter
+  const actionTypes = [
+    'All Actions',
+    'Profile Verification',
+    'Photo Approval',
+    'Subscription',
+    'User Block',
+    'User Unblock',
+    'User Delete',
+    'Login'
+  ];
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, [page, rowsPerPage, actionFilter, dateFilter]);
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    
     try {
-      const response = await api.get('/admin/logs');
+      const params = new URLSearchParams();
+      params.append('limit', rowsPerPage);
+      params.append('offset', page * rowsPerPage);
+      
+      if (actionFilter && actionFilter !== 'All Actions') {
+        params.append('action', actionFilter.toUpperCase().replace(/ /g, '_'));
+      }
+      
+      if (dateFilter) {
+        const today = new Date();
+        let startDate;
+        
+        switch (dateFilter) {
+          case 'today':
+            startDate = new Date(today.setHours(0, 0, 0, 0));
+            break;
+          case 'week':
+            startDate = new Date(today.setDate(today.getDate() - 7));
+            break;
+          case 'month':
+            startDate = new Date(today.setMonth(today.getMonth() - 1));
+            break;
+          default:
+            startDate = null;
+        }
+        
+        if (startDate) {
+          params.append('startDate', startDate.toISOString());
+        }
+      }
+      
+      const response = await api.get(`/admin/logs?${params.toString()}`);
       setLogs(response.data.logs || []);
+      setTotal(response.data.total || 0);
     } catch (error) {
-      // Mock data
-      setLogs([
-        { id: '1', action: 'User Registered', user: 'rama@example.com', timestamp: new Date(), details: 'New user registration' },
-        { id: '2', action: 'Photo Approved', user: 'admin', timestamp: new Date(Date.now() - 3600000), details: 'Profile photo verified' },
-        { id: '3', action: 'Subscription Created', user: 'sowmya@example.com', timestamp: new Date(Date.now() - 7200000), details: 'Premium plan activated' },
-      ]);
+      console.error('Failed to fetch logs:', error);
+      // Keep empty on error
+      setLogs([]);
+      setTotal(0);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleSearch = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleRefresh = () => {
+    setPage(0);
+    fetchLogs(true);
+  };
+
+  // Filter logs by search term on client side
+  const filteredLogs = searchTerm
+    ? logs.filter(log => 
+        log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.details?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : logs;
+
+  // Get action icon based on action type
+  const getActionIcon = (actionType) => {
+    if (actionType?.includes('BLOCK')) return <Block sx={{ fontSize: 20 }} />;
+    if (actionType?.includes('UNBLOCK')) return <CheckCircle sx={{ fontSize: 20 }} />;
+    if (actionType?.includes('DELETE') || actionType?.includes('DELETE_USER')) return <Delete sx={{ fontSize: 20 }} />;
+    if (actionType?.includes('VERIFICATION') || actionType?.includes('VERIFY')) return <VerifiedUser sx={{ fontSize: 20 }} />;
+    if (actionType?.includes('PHOTO') || actionType?.includes('APPROVE')) return <PhotoCamera sx={{ fontSize: 20 }} />;
+    if (actionType?.includes('SUBSCRIPTION')) return <Payment sx={{ fontSize: 20 }} />;
+    if (actionType?.includes('LOGIN')) return <Login sx={{ fontSize: 20 }} />;
+    return <History sx={{ fontSize: 20 }} />;
+  };
+
+  // Get action color based on action type
+  const getActionColor = (actionType) => {
+    if (actionType?.includes('BLOCK') || actionType?.includes('DELETE')) return '#ef4444';
+    if (actionType?.includes('UNBLOCK') || actionType?.includes('VERIFY')) return '#22c55e';
+    if (actionType?.includes('SUBSCRIPTION')) return '#f59e0b';
+    return '#8B5CF6';
+  };
+
+  // Format timestamp
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight="bold" gutterBottom>Activity Logs</Typography>
-      <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-        Track all platform activities
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box>
+          <Typography variant="h5" fontWeight="bold" gutterBottom>Activity Logs</Typography>
+          <Typography variant="body2" color="textSecondary">
+            Track all platform activities • {total} total activities
+          </Typography>
+        </Box>
+        <IconButton onClick={handleRefresh} color="primary" disabled={refreshing}>
+          <RefreshIcon />
+        </IconButton>
+      </Box>
+
+      {/* Filters Row */}
+      <Card sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search by action, user, or details..."
+              value={searchTerm}
+              onChange={handleSearch}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
+              }}
+            />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Action Type</InputLabel>
+              <Select
+                value={actionFilter}
+                label="Action Type"
+                onChange={(e) => setActionFilter(e.target.value)}
+              >
+                {actionTypes.map((type) => (
+                  <MenuItem key={type} value={type}>{type}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Date Range</InputLabel>
+              <Select
+                value={dateFilter}
+                label="Date Range"
+                onChange={(e) => setDateFilter(e.target.value)}
+              >
+                <MenuItem value="">All Time</MenuItem>
+                <MenuItem value="today">Today</MenuItem>
+                <MenuItem value="week">Last 7 Days</MenuItem>
+                <MenuItem value="month">Last 30 Days</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </Card>
 
       {loading ? (
         <LinearProgress />
       ) : (
-        <Card sx={{ borderRadius: 3 }}>
-          <List>
-            {logs.map((log, index) => (
-              <Box key={log.id}>
-                <ListItem sx={{ py: 2 }}>
-                  <ListItemIcon>
-                    <Avatar sx={{ bgcolor: '#8B5CF6', width: 40, height: 40 }}>
-                      <History sx={{ fontSize: 20 }} />
-                    </Avatar>
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={log.action}
-                    secondary={
-                      <>
-                        <Typography variant="body2" component="span">
-                          {log.user}
-                        </Typography>
-                        <Typography variant="caption" display="block" color="textSecondary">
-                          {log.details}
-                        </Typography>
-                      </>
-                    }
-                  />
-                  <Chip
-                    label={new Date(log.timestamp).toLocaleString()}
-                    size="small"
-                    sx={{ bgcolor: '#f0f0f0' }}
-                  />
-                </ListItem>
-                {index < logs.length - 1 && <Divider />}
+        <>
+          <Card sx={{ borderRadius: 3, mb: 2 }}>
+            {filteredLogs.length === 0 ? (
+              <Box sx={{ p: 4, textAlign: 'center' }}>
+                <History sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                <Typography variant="h6" color="textSecondary">No Activity Logs Found</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {searchTerm || actionFilter || dateFilter 
+                    ? 'Try adjusting your filters' 
+                    : 'Platform activities will appear here'}
+                </Typography>
               </Box>
-            ))}
-          </List>
-        </Card>
+            ) : (
+              <List>
+                {filteredLogs.map((log, index) => (
+                  <Box key={log.id}>
+                    <ListItem sx={{ py: 2, px: 3 }}>
+                      <ListItemIcon>
+                        <Avatar 
+                          sx={{ 
+                            bgcolor: getActionColor(log.actionType), 
+                            width: 44, 
+                            height: 44 
+                          }}
+                        >
+                          {getActionIcon(log.actionType)}
+                        </Avatar>
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle1" fontWeight="600">
+                              {log.action}
+                            </Typography>
+                            <Chip 
+                              label={log.actionType} 
+                              size="small" 
+                              sx={{ 
+                                fontSize: '0.7rem',
+                                height: 20,
+                                bgcolor: getActionColor(log.actionType) + '20',
+                                color: getActionColor(log.actionType)
+                              }} 
+                            />
+                          </Box>
+                        }
+                        secondary={
+                          <Box sx={{ mt: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                              <PersonIcon sx={{ fontSize: 14, color: '#666' }} />
+                              <Typography variant="body2" component="span" color="textPrimary" fontWeight="500">
+                                {log.user || 'Unknown User'}
+                              </Typography>
+                              {log.targetUserId && (
+                                <Typography variant="caption" color="textSecondary">
+                                  (Target ID: {log.targetUserId.slice(0, 8)}...)
+                                </Typography>
+                              )}
+                            </Box>
+                            <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.5 }}>
+                              {log.details}
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                              <Typography variant="caption" color="textSecondary">
+                                By: {log.admin}
+                              </Typography>
+                              {log.ipAddress && (
+                                <>
+                                  <Typography variant="caption" color="textSecondary">•</Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    IP: {log.ipAddress}
+                                  </Typography>
+                                </>
+                              )}
+                            </Box>
+                          </Box>
+                        }
+                      />
+                      <Box sx={{ textAlign: 'right', ml: 2 }}>
+                        <Chip
+                          label={formatTimestamp(log.timestamp)}
+                          size="small"
+                          sx={{ bgcolor: '#f5f5f5', fontWeight: 500 }}
+                        />
+                        <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.5 }}>
+                          {new Date(log.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      </Box>
+                    </ListItem>
+                    {index < filteredLogs.length - 1 && <Divider component="li" />}
+                  </Box>
+                ))}
+              </List>
+            )}
+          </Card>
+
+          {/* Pagination */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="body2" color="textSecondary">
+              Showing {filteredLogs.length} of {total} activities
+            </Typography>
+            <TablePagination
+              component="div"
+              count={total}
+              page={page}
+              onPageChange={(event, newPage) => setPage(newPage)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(event) => {
+                setRowsPerPage(parseInt(event.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+            />
+          </Box>
+        </>
       )}
     </Box>
   );

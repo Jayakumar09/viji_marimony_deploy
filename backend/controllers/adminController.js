@@ -120,6 +120,22 @@ const approvePhoto = async (req, res) => {
     // Check if all photos for this user are approved
     await checkPhotoVerificationStatus(photo.userId);
     
+    // Log the activity
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId,
+        action: 'PHOTO_APPROVED',
+        targetUserId: photo.userId,
+        details: JSON.stringify({
+          photoId: id,
+          photoType: photo.photoType,
+          previousStatus: photo.status
+        }),
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('User-Agent')
+      }
+    });
+    
     res.json({ message: 'Photo approved successfully' });
 
     // Broadcast photo approval to the user
@@ -158,6 +174,22 @@ const rejectPhoto = async (req, res) => {
         rejectedReason: reason,
         reviewedBy: adminId,
         reviewedAt: new Date()
+      }
+    });
+    
+    // Log the activity
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId,
+        action: 'PHOTO_REJECTED',
+        targetUserId: photo.userId,
+        details: JSON.stringify({
+          photoId: id,
+          photoType: photo.photoType,
+          rejectionReason: reason
+        }),
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('User-Agent')
       }
     });
     
