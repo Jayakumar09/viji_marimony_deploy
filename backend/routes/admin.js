@@ -288,7 +288,9 @@ router.get('/logs', async (req, res) => {
         details = {};
       }
 
-      const timestamp = details.viewedAt || details.createdAt || log.createdAt || null;
+      // Get timestamp - ensure it's in ISO format
+      const rawTimestamp = details.viewedAt || details.createdAt || log.createdAt;
+      const timestamp = rawTimestamp ? (typeof rawTimestamp === 'string' ? rawTimestamp : rawTimestamp.toISOString()) : (log.createdAt ? log.createdAt.toISOString() : null);
 
       // Get user name with proper priority
       const userName = details.userName || details.userEmail || null;
