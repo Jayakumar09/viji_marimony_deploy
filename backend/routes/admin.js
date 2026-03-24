@@ -233,7 +233,7 @@ router.post('/share-profile-email', upload.single('pdf'), async (req, res) => {
 router.get('/logs', async (req, res) => {
   try {
     const { prisma } = require('../utils/database');
-    const { action, startDate, endDate, limit = 50, offset = 0 } = req.query;
+    const { action, startDate, endDate, limit = 10, offset = 0 } = req.query;
     
     // Build where clause
     const where = {};
@@ -242,7 +242,12 @@ router.get('/logs', async (req, res) => {
       where.action = { contains: action };
     }
     
-    if (startDate || endDate) {
+    // Default to today's logs if no date filter provided
+    if (!startDate && !endDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      where.createdAt = { gte: today };
+    } else if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
         where.createdAt.gte = new Date(startDate);
@@ -289,7 +294,9 @@ router.get('/logs', async (req, res) => {
         id: log.id,
         action: displayAction,
         actionType: log.action,
-        user: details.userName || details.userEmail || log.admin?.name || log.admin?.email || 'System',
+        user: { 
+          name: details.userName || details.userEmail || log.admin?.name || log.admin?.email || 'Guest User'
+        },
         targetUserId: log.targetUserId,
         timestamp: log.createdAt,
         details: details.raw || `${displayAction} - ${JSON.stringify(details)}`,

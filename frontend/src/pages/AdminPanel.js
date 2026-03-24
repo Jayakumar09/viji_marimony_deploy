@@ -15,7 +15,7 @@ import {
   MoreVert, Block, Check, Close, Star, Email, Phone, LocationOn,
   CalendarToday, VerifiedUser,PendingActions, History, AttachMoney, Edit, Chat,
   Send as SendIcon, Delete as DeleteIcon, Image as ImageIcon, Share,
-  Person as PersonIcon, Payment, Login
+  Person, Payment, Login
 } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -2312,33 +2312,43 @@ const SubscriptionManagement = () => {
   );
 };
 
-// Activity Logs Component
+// Activity Logs Component - Modern Card-based Design
 const ActivityLogs = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('today'); // Default to today
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [rowsPerPage] = useState(10); // Fixed 10 per page
   const [refreshing, setRefreshing] = useState(false);
 
   // Action types for filter
   const actionTypes = [
     'All Actions',
-    'Profile Verification',
-    'Photo Approval',
-    'Subscription',
-    'User Block',
-    'User Unblock',
-    'User Delete',
-    'Login'
+    'VIEW_USER_PROFILE',
+    'PHOTO_APPROVED',
+    'PHOTO_REJECTED',
+    'PROFILE_VERIFICATION_APPROVED',
+    'PAYMENT_APPROVED',
+    'PAYMENT_REJECTED',
+    'USER_BLOCKED',
+    'USER_UNBLOCKED',
+    'SUBSCRIPTION_CREATED'
+  ];
+
+  // Date range options
+  const dateRangeOptions = [
+    { value: 'today', label: 'Today' },
+    { value: 'week', label: 'Last 7 Days' },
+    { value: 'month', label: 'Last 30 Days' },
+    { value: 'all', label: 'All Time' }
   ];
 
   useEffect(() => {
     fetchLogs();
-  }, [page, rowsPerPage, actionFilter, dateFilter]);
+  }, [page, actionFilter, dateFilter]);
 
   const fetchLogs = async (isRefresh = false) => {
     if (isRefresh) {
@@ -2352,15 +2362,14 @@ const ActivityLogs = () => {
       params.append('limit', rowsPerPage);
       params.append('offset', page * rowsPerPage);
       
-      if (actionFilter && actionFilter !== 'All Actions') {
-        params.append('action', actionFilter.toUpperCase().replace(/ /g, '_'));
-      }
+      // Default to today if no filter selected
+      const filterToUse = dateFilter || 'today';
       
-      if (dateFilter) {
+      if (filterToUse && filterToUse !== 'all') {
         const today = new Date();
         let startDate;
         
-        switch (dateFilter) {
+        switch (filterToUse) {
           case 'today':
             startDate = new Date(today.setHours(0, 0, 0, 0));
             break;
@@ -2384,7 +2393,6 @@ const ActivityLogs = () => {
       setTotal(response.data.total || 0);
     } catch (error) {
       console.error('Failed to fetch logs:', error);
-      // Keep empty on error
       setLogs([]);
       setTotal(0);
     } finally {
@@ -2393,8 +2401,11 @@ const ActivityLogs = () => {
     }
   };
 
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value);
+  const handleReset = () => {
+    setSearchTerm('');
+    setActionFilter('');
+    setDateFilter('today');
+    setPage(0);
   };
 
   const handleRefresh = () => {
@@ -2405,226 +2416,389 @@ const ActivityLogs = () => {
   // Filter logs by search term on client side
   const filteredLogs = searchTerm
     ? logs.filter(log => 
-        log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.details?.toLowerCase().includes(searchTerm.toLowerCase())
+        log.action?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.actionType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.user?.name || log.user || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.details || '').toLowerCase().includes(searchTerm.toLowerCase())
       )
     : logs;
 
   // Get action icon based on action type
   const getActionIcon = (actionType) => {
-    if (actionType?.includes('BLOCK')) return <Block sx={{ fontSize: 20 }} />;
-    if (actionType?.includes('UNBLOCK')) return <CheckCircle sx={{ fontSize: 20 }} />;
-    if (actionType?.includes('DELETE') || actionType?.includes('DELETE_USER')) return <Delete sx={{ fontSize: 20 }} />;
-    if (actionType?.includes('VERIFICATION') || actionType?.includes('VERIFY')) return <VerifiedUser sx={{ fontSize: 20 }} />;
-    if (actionType?.includes('PHOTO') || actionType?.includes('APPROVE')) return <PhotoCamera sx={{ fontSize: 20 }} />;
-    if (actionType?.includes('SUBSCRIPTION')) return <Payment sx={{ fontSize: 20 }} />;
-    if (actionType?.includes('LOGIN')) return <Login sx={{ fontSize: 20 }} />;
-    return <History sx={{ fontSize: 20 }} />;
+    if (actionType?.includes('BLOCK')) return <Block sx={{ fontSize: 22 }} />;
+    if (actionType?.includes('UNBLOCK')) return <CheckCircle sx={{ fontSize: 22 }} />;
+    if (actionType?.includes('DELETE')) return <Delete sx={{ fontSize: 22 }} />;
+    if (actionType?.includes('VERIFICATION') || actionType?.includes('VERIFY')) return <VerifiedUser sx={{ fontSize: 22 }} />;
+    if (actionType?.includes('PHOTO')) return <PhotoCamera sx={{ fontSize: 22 }} />;
+    if (actionType?.includes('PAYMENT') || actionType?.includes('SUBSCRIPTION')) return <AttachMoney sx={{ fontSize: 22 }} />;
+    if (actionType?.includes('VIEW')) return <Visibility sx={{ fontSize: 22 }} />;
+    return <History sx={{ fontSize: 22 }} />;
   };
 
-  // Get action color based on action type
-  const getActionColor = (actionType) => {
-    if (actionType?.includes('BLOCK') || actionType?.includes('DELETE')) return '#ef4444';
-    if (actionType?.includes('UNBLOCK') || actionType?.includes('VERIFY')) return '#22c55e';
-    if (actionType?.includes('SUBSCRIPTION')) return '#f59e0b';
-    return '#8B5CF6';
+  // Get status badge color
+  const getStatusBadge = (actionType) => {
+    if (actionType?.includes('BLOCK') || actionType?.includes('DELETE') || actionType?.includes('REJECT')) {
+      return { color: '#ef4444', label: 'Error', bg: '#fef2f2' };
+    }
+    if (actionType?.includes('VIEW')) {
+      return { color: '#3b82f6', label: 'View', bg: '#eff6ff' };
+    }
+    return { color: '#22c55e', label: 'Success', bg: '#f0fdf4' };
   };
 
-  // Format timestamp
+  // Format timestamp properly
   const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return date.toLocaleString('en-IN', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
+
+  // Get user name with fallback
+  const getUserName = (log) => {
+    if (log.user?.name) return log.user.name;
+    if (log.user) return log.user;
+    return 'Guest User';
+  };
+
+  // Loading skeleton
+  const LoadingSkeleton = () => (
+    <>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Box key={i} sx={{ 
+          p: 3, 
+          mb: 2, 
+          borderRadius: '12px',
+          bgcolor: '#f8fafc',
+          animation: 'pulse 1.5s infinite',
+          '@keyframes pulse': {
+            '0%, 100%': { opacity: 1 },
+            '50%': { opacity: 0.5 }
+          }
+        }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+            <Box sx={{ width: 44, height: 44, borderRadius: '50%', bgcolor: '#e2e8f0' }} />
+            <Box sx={{ flex: 1 }}>
+              <Box sx={{ height: 20, width: '40%', bgcolor: '#e2e8f0', borderRadius: '4px', mb: 1 }} />
+              <Box sx={{ height: 14, width: '60%', bgcolor: '#e2e8f0', borderRadius: '4px', mb: 1 }} />
+              <Box sx={{ height: 12, width: '30%', bgcolor: '#e2e8f0', borderRadius: '4px' }} />
+            </Box>
+            <Box sx={{ height: 24, width: 100, bgcolor: '#e2e8f0', borderRadius: '4px' }} />
+          </Box>
+        </Box>
+      ))}
+    </>
+  );
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight="bold" gutterBottom>Activity Logs</Typography>
-          <Typography variant="body2" color="textSecondary">
-            Track all platform activities • {total} total activities
-          </Typography>
-        </Box>
-        <IconButton onClick={handleRefresh} color="primary" disabled={refreshing}>
-          <RefreshIcon />
-        </IconButton>
+    <Box sx={{ 
+      minHeight: '100vh',
+      bgcolor: '#f8fafc',
+      p: { xs: 2, md: 3 }
+    }}>
+      {/* Header */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
+          Activity Logs
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#64748b' }}>
+          Track and monitor all platform activities
+        </Typography>
       </Box>
 
-      {/* Filters Row */}
-      <Card sx={{ p: 2, mb: 3, borderRadius: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Search by action, user, or details..."
-              value={searchTerm}
-              onChange={handleSearch}
-              InputProps={{
-                startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
+      {/* Filter Bar - Modern Design */}
+      <Box sx={{ 
+        bgcolor: 'white', 
+        borderRadius: '16px', 
+        p: 2.5, 
+        mb: 3,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+        border: '1px solid #e2e8f0'
+      }}>
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 2, 
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}>
+          {/* Search Input */}
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by action, user, or details"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            sx={{ 
+              flex: '1 1 250px',
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '10px',
+                bgcolor: '#f8fafc',
+                '& fieldset': { borderColor: '#e2e8f0' },
+                '&:hover fieldset': { borderColor: '#cbd5e1' },
+                '&.Mui-focused fieldset': { borderColor: '#8B5CF6', borderWidth: 2 }
+              }
+            }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: '#94a3b8' }} /></InputAdornment>,
+            }}
+          />
+          
+          {/* Action Type Dropdown */}
+          <FormControl size="small" sx={{ flex: '0 0 180px' }}>
+            <Select
+              value={actionFilter}
+              onChange={(e) => setActionFilter(e.target.value)}
+              displayEmpty
+              sx={{ 
+                borderRadius: '10px',
+                bgcolor: '#f8fafc',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#8B5CF6', borderWidth: 2 }
               }}
-            />
-          </Grid>
-          <Grid item xs={6} md={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Action Type</InputLabel>
-              <Select
-                value={actionFilter}
-                label="Action Type"
-                onChange={(e) => setActionFilter(e.target.value)}
-              >
-                {actionTypes.map((type) => (
-                  <MenuItem key={type} value={type}>{type}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={6} md={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Date Range</InputLabel>
-              <Select
-                value={dateFilter}
-                label="Date Range"
-                onChange={(e) => setDateFilter(e.target.value)}
-              >
-                <MenuItem value="">All Time</MenuItem>
-                <MenuItem value="today">Today</MenuItem>
-                <MenuItem value="week">Last 7 Days</MenuItem>
-                <MenuItem value="month">Last 30 Days</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
-      </Card>
+              renderValue={(value) => value || 'All Actions'}
+            >
+              {actionTypes.map((type) => (
+                <MenuItem key={type} value={type}>
+                  {type === 'All Actions' ? 'All Actions' : type.replace(/_/g, ' ')}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {/* Date Range Dropdown */}
+          <FormControl size="small" sx={{ flex: '0 0 150px' }}>
+            <Select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              sx={{ 
+                borderRadius: '10px',
+                bgcolor: '#f8fafc',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#8B5CF6', borderWidth: 2 }
+              }}
+            >
+              {dateRangeOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {/* Reset Button */}
+          <Button
+            variant="outlined"
+            onClick={handleReset}
+            sx={{ 
+              borderRadius: '10px',
+              borderColor: '#e2e8f0',
+              color: '#64748b',
+              textTransform: 'none',
+              px: 2,
+              '&:hover': {
+                borderColor: '#cbd5e1',
+                bgcolor: '#f8fafc'
+              }
+            }}
+          >
+            Reset
+          </Button>
+          
+          {/* Refresh Button */}
+          <IconButton 
+            onClick={handleRefresh} 
+            disabled={refreshing}
+            sx={{ 
+              bgcolor: '#8B5CF6',
+              color: 'white',
+              borderRadius: '10px',
+              '&:hover': { bgcolor: '#7c3aed' },
+              '&:disabled': { bgcolor: '#cbd5e1' }
+            }}
+          >
+            <RefreshIcon />
+          </IconButton>
+        </Box>
+      </Box>
 
+      {/* Activity Logs Cards */}
       {loading ? (
-        <LinearProgress />
+        <LoadingSkeleton />
       ) : (
         <>
-          <Card sx={{ borderRadius: 3, mb: 2 }}>
-            {filteredLogs.length === 0 ? (
-              <Box sx={{ p: 4, textAlign: 'center' }}>
-                <History sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                <Typography variant="h6" color="textSecondary">No Activity Logs Found</Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {searchTerm || actionFilter || dateFilter 
-                    ? 'Try adjusting your filters' 
-                    : 'Platform activities will appear here'}
-                </Typography>
+          {filteredLogs.length === 0 ? (
+            /* Empty State */
+            <Box sx={{ 
+              textAlign: 'center', 
+              py: 8,
+              px: 4,
+              bgcolor: 'white',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0'
+            }}>
+              <Box sx={{ 
+                width: 80, 
+                height: 80, 
+                borderRadius: '50%', 
+                bgcolor: '#f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mx: 'auto',
+                mb: 2
+              }}>
+                <History sx={{ fontSize: 40, color: '#94a3b8' }} />
               </Box>
-            ) : (
-              <List>
-                {filteredLogs.map((log, index) => (
-                  <Box key={log.id}>
-                    <ListItem sx={{ py: 2, px: 3 }}>
-                      <ListItemIcon>
-                        <Avatar 
-                          sx={{ 
-                            bgcolor: getActionColor(log.actionType), 
-                            width: 44, 
-                            height: 44 
-                          }}
-                        >
-                          {getActionIcon(log.actionType)}
-                        </Avatar>
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="subtitle1" fontWeight="600">
-                              {log.action}
-                            </Typography>
-                            <Chip 
-                              label={log.actionType} 
-                              size="small" 
-                              sx={{ 
-                                fontSize: '0.7rem',
-                                height: 20,
-                                bgcolor: getActionColor(log.actionType) + '20',
-                                color: getActionColor(log.actionType)
-                              }} 
-                            />
+              <Typography variant="h6" sx={{ color: '#475569', mb: 1, fontWeight: 600 }}>
+                No activity found
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                {searchTerm || actionFilter || dateFilter !== 'today'
+                  ? 'Try adjusting your filters to see more results'
+                  : 'No activities recorded today'}
+              </Typography>
+            </Box>
+          ) : (
+            /* Activity Cards */
+            <Box>
+              {filteredLogs.map((log) => {
+                const status = getStatusBadge(log.actionType);
+                return (
+                  <Box
+                    key={log.id}
+                    sx={{
+                      bgcolor: 'white',
+                      borderRadius: '12px',
+                      p: 2.5,
+                      mb: 2,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+                      border: '1px solid #e2e8f0',
+                      transition: 'all 0.2s ease',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        transform: 'translateY(-1px)',
+                        borderColor: '#cbd5e1'
+                      }
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                      {/* Icon */}
+                      <Box sx={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: '12px',
+                        bgcolor: status.bg,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        {getActionIcon(log.actionType)}
+                      </Box>
+                      
+                      {/* Content */}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
+                          <Typography sx={{ 
+                            fontWeight: 600, 
+                            color: '#1e293b',
+                            fontSize: '0.95rem'
+                          }}>
+                            {log.actionType?.replace(/_/g, ' ') || log.action || 'Activity'}
+                          </Typography>
+                          <Box sx={{
+                            px: 1.5,
+                            py: 0.25,
+                            borderRadius: '6px',
+                            bgcolor: status.bg,
+                            color: status.color,
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase'
+                          }}>
+                            {status.label}
                           </Box>
-                        }
-                        secondary={
-                          <Box sx={{ mt: 0.5 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                              <PersonIcon sx={{ fontSize: 14, color: '#666' }} />
-                              <Typography variant="body2" component="span" color="textPrimary" fontWeight="500">
-                                {log.user || 'Unknown User'}
-                              </Typography>
-                              {log.targetUserId && (
-                                <Typography variant="caption" color="textSecondary">
-                                  (Target ID: {log.targetUserId.slice(0, 8)}...)
-                                </Typography>
-                              )}
-                            </Box>
-                            <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.5 }}>
-                              {log.details}
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                          <Person sx={{ fontSize: 14, color: '#64748b' }} />
+                          <Typography sx={{ color: '#334155', fontWeight: 500, fontSize: '0.875rem' }}>
+                            {getUserName(log)}
+                          </Typography>
+                          {log.targetUserId && (
+                            <Typography sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                              (ID: {log.targetUserId?.slice(0, 8)}...)
                             </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                              <Typography variant="caption" color="textSecondary">
-                                By: {log.admin}
-                              </Typography>
-                              {log.ipAddress && (
-                                <>
-                                  <Typography variant="caption" color="textSecondary">•</Typography>
-                                  <Typography variant="caption" color="textSecondary">
-                                    IP: {log.ipAddress}
-                                  </Typography>
-                                </>
-                              )}
-                            </Box>
-                          </Box>
-                        }
-                      />
-                      <Box sx={{ textAlign: 'right', ml: 2 }}>
-                        <Chip
-                          label={formatTimestamp(log.timestamp)}
-                          size="small"
-                          sx={{ bgcolor: '#f5f5f5', fontWeight: 500 }}
-                        />
-                        <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.5 }}>
-                          {new Date(log.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          )}
+                        </Box>
+                        
+                        {log.details && (
+                          <Typography sx={{ color: '#64748b', fontSize: '0.8rem', mb: 0.5 }}>
+                            {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
+                          </Typography>
+                        )}
+                      </Box>
+                      
+                      {/* Timestamp */}
+                      <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                        <Typography sx={{ 
+                          color: '#475569', 
+                          fontWeight: 500,
+                          fontSize: '0.85rem'
+                        }}>
+                          {formatTimestamp(log.timestamp)}
                         </Typography>
                       </Box>
-                    </ListItem>
-                    {index < filteredLogs.length - 1 && <Divider component="li" />}
+                    </Box>
                   </Box>
-                ))}
-              </List>
-            )}
-          </Card>
-
-          {/* Pagination */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2" color="textSecondary">
-              Showing {filteredLogs.length} of {total} activities
-            </Typography>
-            <TablePagination
-              component="div"
-              count={total}
-              page={page}
-              onPageChange={(event, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(event) => {
-                setRowsPerPage(parseInt(event.target.value, 10));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[10, 25, 50, 100]}
-            />
-          </Box>
+                );
+              })}
+              
+              {/* Pagination */}
+              {total > rowsPerPage && (
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  mt: 3,
+                  px: 1
+                }}>
+                  <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
+                    Showing {filteredLogs.length} of {total} activities
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={page === 0}
+                      onClick={() => setPage(page - 1)}
+                      sx={{ borderRadius: '8px' }}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={(page + 1) * rowsPerPage >= total}
+                      onClick={() => setPage(page + 1)}
+                      sx={{ borderRadius: '8px' }}
+                    >
+                      Next
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          )}
         </>
       )}
     </Box>
