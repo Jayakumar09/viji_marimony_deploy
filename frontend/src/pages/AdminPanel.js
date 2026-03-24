@@ -2367,25 +2367,47 @@ const LogCard = ({ log }) => {
   // Get user name - use actual name, fallback to Guest User
   const userName = log.user?.name || log.user || 'Guest User';
   
-  // Get clean details - avoid raw JSON
-  const getDetails = () => {
-    if (!log.details) return null;
-    if (typeof log.details === 'string') {
-      // If it's a simple string, use it
-      if (log.details.length < 50 && !log.details.includes('{')) {
-        return log.details;
-      }
-      return null;
+  // Get timestamp - prefer createdAt/viewedAt from details
+  const getTimestamp = () => {
+    if (log.details?.viewedAt) {
+      return new Date(log.details.viewedAt);
     }
-    // If it's an object, extract meaningful fields
-    const d = log.details;
-    if (d.userName) return `User: ${d.userName}`;
-    if (d.userEmail) return `Email: ${d.userEmail}`;
+    if (log.details?.createdAt) {
+      return new Date(log.details.createdAt);
+    }
+    if (log.timestamp) {
+      return new Date(log.timestamp);
+    }
     return null;
   };
 
-  const details = getDetails();
+  const timestamp = getTimestamp();
   const status = getStatusBadge(log.actionType);
+
+  // Format timestamp for display
+  const formatTime = (date) => {
+    if (!date || isNaN(date.getTime())) return '';
+    return date.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Format relative time
+  const getRelativeTime = (date) => {
+    if (!date) return '';
+    const now = new Date();
+    const diff = now - date;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return formatTime(date);
+  };
 
   return (
     <Box sx={{
@@ -2419,6 +2441,7 @@ const LogCard = ({ log }) => {
         
         {/* Content */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Action Title */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
             <Typography sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>
               {log.actionType?.replace(/_/g, ' ') || log.action || 'Activity'}
@@ -2428,28 +2451,30 @@ const LogCard = ({ log }) => {
             </Box>
           </Box>
           
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ color: '#334155', fontWeight: 500, fontSize: '0.8rem' }}>
-              {userName}
-            </Typography>
-            {log.targetUserId && (
-              <Typography sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
-                (ID: {log.targetUserId?.slice(0, 6)}...)
-              </Typography>
-            )}
-          </Box>
+          {/* User Name */}
+          <Typography sx={{ color: '#334155', fontWeight: 500, fontSize: '0.8rem', mb: 0.25 }}>
+            {userName}
+          </Typography>
           
-          {details && (
-            <Typography sx={{ color: '#64748b', fontSize: '0.75rem', mt: 0.25 }}>
-              {details}
+          {/* Target ID */}
+          {log.targetUserId && (
+            <Typography sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+              ID: {log.targetUserId?.slice(0, 8)}...
             </Typography>
           )}
         </Box>
         
         {/* Timestamp */}
-        <Typography sx={{ color: '#94a3b8', fontSize: '0.75rem', flexShrink: 0 }}>
-          {formatActivityDate(log)}
-        </Typography>
+        <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+          <Typography sx={{ color: '#475569', fontWeight: 500, fontSize: '0.8rem' }}>
+            {timestamp ? getRelativeTime(timestamp) : ''}
+          </Typography>
+          {timestamp && (
+            <Typography sx={{ color: '#94a3b8', fontSize: '0.65rem' }}>
+              {formatTime(timestamp)}
+            </Typography>
+          )}
+        </Box>
       </Box>
     </Box>
   );
