@@ -292,14 +292,16 @@ router.get('/logs', async (req, res) => {
       const userName = details.userName || details.userEmail || null;
       const adminName = log.admin?.name || log.admin?.email || null;
       
+      // Extract viewedAt or createdAt from details
+      const viewedAt = details.viewedAt || details.createdAt || null;
+      
       return {
         id: log.id,
         action: log.action.replace(/_/g, ' '),
         actionType: log.action,
         user: userName || adminName || 'Guest User',
         targetUserId: log.targetUserId,
-        timestamp: log.createdAt,
-        details: details,
+        timestamp: viewedAt || log.createdAt,
         admin: adminName || 'System'
       };
     });
