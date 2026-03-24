@@ -1,6 +1,6 @@
 # Completed Works
 
-## Last Updated: February 27, 2026
+## Last Updated: March 24, 2026
 
 ## ✅ Core Features
 
@@ -166,6 +166,9 @@
 | Admin Panel | ✅ Complete | Feb 2026 |
 | PDF Generation | ✅ Complete | Feb 2026 |
 | Watermark Feature | ✅ Complete | Feb 27, 2026 |
+| Activity Logs Enhancement | ✅ Complete | Mar 24, 2026 |
+| Admin Panel Bug Fixes | ✅ Complete | Mar 24, 2026 |
+| GitHub Actions Optimization | ✅ Complete | Mar 24, 2026 |
 
 ---
 
@@ -176,6 +179,33 @@
 3. **Admin Panel** - Complete admin dashboard
 4. **PDF Export** - Profile PDF with watermark
 5. **GitHub Repository** - Complete code pushed
+
+---
+
+## 🔧 March 24, 2026 - Activity Logs & Bug Fixes
+
+### Activity Logs Enhancements
+- [x] Fixed timestamp display showing N/A issue
+- [x] Added proper ISO format serialization for timestamps
+- [x] Implemented relative time display (e.g., "2m ago", "Just now")
+- [x] Added formatted date display (e.g., "24 Mar 2026, 4:55 PM")
+- [x] Improved frontend timestamp parsing logic
+
+### Admin Panel Bug Fixes
+- [x] Fixed "filteredLogs is not defined" error
+- [x] Fixed "Refresh is not defined" - changed to RefreshIcon
+- [x] Fixed "Search is not defined" - changed to SearchIcon
+- [x] Updated all refresh buttons to use proper MUI icon imports
+
+### GitHub Actions Optimization
+- [x] Added retention-days: 5 to workflow checkout steps
+- [x] Reduces GitHub Actions cache usage
+
+### Files Modified
+- `frontend/src/pages/AdminPanel.js` - Activity Logs UI and bug fixes
+- `backend/routes/admin.js` - Timestamp serialization fix
+- `.github/workflows/deploy.yml` - Added retention-days
+- `COMPLETED_WORKS.md` - Updated with latest changes
 
 ---
 
