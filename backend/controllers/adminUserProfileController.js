@@ -370,7 +370,11 @@ const getAdminUserProfile = async (req, res) => {
       adminId,
       action: 'VIEW_USER_PROFILE',
       targetUserId: id,
-      details: { viewedAt: new Date() }
+      details: { 
+        userName: `${user.firstName} ${user.lastName}`,
+        userEmail: user.email,
+        viewedAt: new Date() 
+      }
     });
 
     res.json({
