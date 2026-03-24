@@ -280,29 +280,28 @@ router.get('/logs', async (req, res) => {
     const total = await prisma.adminActivityLog.count({ where });
     
     // Transform logs for frontend display
-    const transformedLogs = logs.map(log => {
+    const transformedLogs = logs.map((log) => {
       let details = {};
       try {
-        details = log.details ? JSON.parse(log.details) : {};
+        details = typeof log.details === "string" ? JSON.parse(log.details) : (log.details || {});
       } catch (e) {
         details = {};
       }
-      
+
+      const timestamp = details.viewedAt || details.createdAt || log.createdAt || null;
+
       // Get user name with proper priority
       const userName = details.userName || details.userEmail || null;
       const adminName = log.admin?.name || log.admin?.email || null;
-      
-      // Extract viewedAt or createdAt from details
-      const viewedAt = details.viewedAt || details.createdAt || null;
-      
+
       return {
         id: log.id,
-        action: log.action.replace(/_/g, ' '),
+        action: log.action.replace(/_/g, " "),
         actionType: log.action,
-        user: userName || adminName || 'Guest User',
+        user: userName || adminName || "Guest User",
         targetUserId: log.targetUserId,
-        timestamp: viewedAt || log.createdAt,
-        admin: adminName || 'System'
+        timestamp: timestamp,
+        admin: adminName || "System"
       };
     });
     

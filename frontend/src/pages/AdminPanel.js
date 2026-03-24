@@ -2367,32 +2367,28 @@ const LogCard = ({ log }) => {
   // Get user name - use actual name, fallback to Guest User
   const userName = log.user?.name || log.user || 'Guest User';
   
-  // Get timestamp - prefer createdAt/viewedAt from details
+  // Get timestamp from log.timestamp
   const getTimestamp = () => {
-    if (log.details?.viewedAt) {
-      return new Date(log.details.viewedAt);
-    }
-    if (log.details?.createdAt) {
-      return new Date(log.details.createdAt);
-    }
-    if (log.timestamp) {
-      return new Date(log.timestamp);
-    }
-    return null;
+    if (!log.timestamp) return null;
+
+    const date = new Date(log.timestamp);
+    return isNaN(date.getTime()) ? null : date;
   };
 
   const timestamp = getTimestamp();
   const status = getStatusBadge(log.actionType);
 
-  // Format timestamp for display
+  // Format with toLocaleString (safe)
   const formatTime = (date) => {
-    if (!date || isNaN(date.getTime())) return '';
-    return date.toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
+    if (!date) return "N/A";
+
+    return date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
     });
   };
 
@@ -2467,13 +2463,11 @@ const LogCard = ({ log }) => {
         {/* Timestamp */}
         <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
           <Typography sx={{ color: '#475569', fontWeight: 500, fontSize: '0.8rem' }}>
-            {timestamp ? getRelativeTime(timestamp) : ''}
+            {timestamp ? getRelativeTime(timestamp) : "N/A"}
           </Typography>
-          {timestamp && (
-            <Typography sx={{ color: '#94a3b8', fontSize: '0.65rem' }}>
-              {formatTime(timestamp)}
-            </Typography>
-          )}
+          <Typography sx={{ color: '#94a3b8', fontSize: '0.65rem' }}>
+            {formatTime(timestamp)}
+          </Typography>
         </Box>
       </Box>
     </Box>
