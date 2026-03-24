@@ -2312,19 +2312,151 @@ const SubscriptionManagement = () => {
   );
 };
 
-// Activity Logs Component - Modern Card-based Design
-const ActivityLogs = () => {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [actionFilter, setActionFilter] = useState('');
-  const [dateFilter, setDateFilter] = useState('today'); // Default to today
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage] = useState(10); // Fixed 10 per page
-  const [refreshing, setRefreshing] = useState(false);
+// ============ ACTIVITY LOGS HELPER FUNCTIONS ============
 
-  // Action types for filter
+// Format activity date with local timezone
+const formatActivityDate = (log) => {
+  if (!log.timestamp) return '';
+  const date = new Date(log.timestamp);
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+};
+
+// Filter only today's logs
+const filterTodayLogs = (logs) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  return logs.filter(log => {
+    const logDate = new Date(log.timestamp);
+    return logDate >= today && logDate < tomorrow;
+  });
+};
+
+// ============ REUSABLE LOG CARD COMPONENT ============
+const LogCard = ({ log }) => {
+  const getActionIcon = (actionType) => {
+    if (actionType?.includes('BLOCK')) return <Block sx={{ fontSize: 18 }} />;
+    if (actionType?.includes('UNBLOCK')) return <CheckCircle sx={{ fontSize: 18 }} />;
+    if (actionType?.includes('DELETE')) return <Delete sx={{ fontSize: 18 }} />;
+    if (actionType?.includes('VERIFICATION') || actionType?.includes('VERIFY')) return <VerifiedUser sx={{ fontSize: 18 }} />;
+    if (actionType?.includes('PHOTO')) return <PhotoCamera sx={{ fontSize: 18 }} />;
+    if (actionType?.includes('PAYMENT') || actionType?.includes('SUBSCRIPTION')) return <AttachMoney sx={{ fontSize: 18 }} />;
+    if (actionType?.includes('VIEW')) return <Visibility sx={{ fontSize: 18 }} />;
+    return <History sx={{ fontSize: 18 }} />;
+  };
+
+  const getStatusBadge = (actionType) => {
+    if (actionType?.includes('BLOCK') || actionType?.includes('DELETE') || actionType?.includes('REJECT')) {
+      return { color: '#ef4444', label: 'Error', bg: '#fef2f2' };
+    }
+    if (actionType?.includes('VIEW')) {
+      return { color: '#3b82f6', label: 'View', bg: '#eff6ff' };
+    }
+    return { color: '#22c55e', label: 'Success', bg: '#f0fdf4' };
+  };
+
+  // Get user name - use actual name, fallback to Guest User
+  const userName = log.user?.name || log.user || 'Guest User';
+  
+  // Get clean details - avoid raw JSON
+  const getDetails = () => {
+    if (!log.details) return null;
+    if (typeof log.details === 'string') {
+      // If it's a simple string, use it
+      if (log.details.length < 50 && !log.details.includes('{')) {
+        return log.details;
+      }
+      return null;
+    }
+    // If it's an object, extract meaningful fields
+    const d = log.details;
+    if (d.userName) return `User: ${d.userName}`;
+    if (d.userEmail) return `Email: ${d.userEmail}`;
+    return null;
+  };
+
+  const details = getDetails();
+  const status = getStatusBadge(log.actionType);
+
+  return (
+    <Box sx={{
+      bgcolor: 'white',
+      borderRadius: '10px',
+      p: 1.5,
+      mb: 1.5,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      border: '1px solid #e2e8f0',
+      transition: 'all 0.2s ease',
+      '&:hover': {
+        boxShadow: '0 3px 8px rgba(0,0,0,0.08)',
+        borderColor: '#cbd5e1'
+      }
+    }}>
+      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+        {/* Icon */}
+        <Box sx={{
+          width: 36,
+          height: 36,
+          borderRadius: '10px',
+          bgcolor: status.bg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          color: status.color
+        }}>
+          {getActionIcon(log.actionType)}
+        </Box>
+        
+        {/* Content */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
+            <Typography sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>
+              {log.actionType?.replace(/_/g, ' ') || log.action || 'Activity'}
+            </Typography>
+            <Box sx={{ px: 1, py: 0.125, borderRadius: '4px', bgcolor: status.bg, color: status.color, fontSize: '0.65rem', fontWeight: 600 }}>
+              {status.label}
+            </Box>
+          </Box>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography sx={{ color: '#334155', fontWeight: 500, fontSize: '0.8rem' }}>
+              {userName}
+            </Typography>
+            {log.targetUserId && (
+              <Typography sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                (ID: {log.targetUserId?.slice(0, 6)}...)
+              </Typography>
+            )}
+          </Box>
+          
+          {details && (
+            <Typography sx={{ color: '#64748b', fontSize: '0.75rem', mt: 0.25 }}>
+              {details}
+            </Typography>
+          )}
+        </Box>
+        
+        {/* Timestamp */}
+        <Typography sx={{ color: '#94a3b8', fontSize: '0.75rem', flexShrink: 0 }}>
+          {formatActivityDate(log)}
+        </Typography>
+      </Box>
+    </Box>
+  );
+};
+
+// ============ REUSABLE FILTER BAR COMPONENT ============
+const FilterBar = ({ searchTerm, setSearchTerm, actionFilter, setActionFilter, dateFilter, setDateFilter, onReset, onRefresh, refreshing }) => {
   const actionTypes = [
     'All Actions',
     'VIEW_USER_PROFILE',
@@ -2338,13 +2470,75 @@ const ActivityLogs = () => {
     'SUBSCRIPTION_CREATED'
   ];
 
-  // Date range options
   const dateRangeOptions = [
     { value: 'today', label: 'Today' },
     { value: 'week', label: 'Last 7 Days' },
     { value: 'month', label: 'Last 30 Days' },
     { value: 'all', label: 'All Time' }
   ];
+
+  return (
+    <Box sx={{ bgcolor: 'white', borderRadius: '12px', p: 2, mb: 2, border: '1px solid #e2e8f0' }}>
+      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <TextField
+          size="small"
+          placeholder="Search by action, user..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{ flex: '1 1 180px', minWidth: '150px', '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#f8fafc' } }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: '#94a3b8', fontSize: 18 }} /></InputAdornment> }}
+        />
+        
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <Select
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+            displayEmpty
+            sx={{ borderRadius: '8px', bgcolor: '#f8fafc', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' } }}
+            renderValue={(value) => value || 'All Actions'}
+          >
+            {actionTypes.map((type) => (
+              <MenuItem key={type} value={type}>{type === 'All Actions' ? 'All Actions' : type.replace(/_/g, ' ')}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        
+        <FormControl size="small" sx={{ minWidth: 120 }}>
+          <Select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            sx={{ borderRadius: '8px', bgcolor: '#f8fafc', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' } }}
+          >
+            {dateRangeOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        
+        <Button variant="outlined" onClick={onReset} sx={{ borderRadius: '8px', borderColor: '#e2e8f0', color: '#64748b', textTransform: 'none', '&:hover': { borderColor: '#cbd5e1' } }}>
+          Reset
+        </Button>
+        
+        <IconButton onClick={onRefresh} disabled={refreshing} sx={{ bgcolor: '#8B5CF6', color: 'white', borderRadius: '8px', '&:hover': { bgcolor: '#7c3aed' } }}>
+          <RefreshIcon fontSize="small" />
+        </IconButton>
+      </Box>
+    </Box>
+  );
+};
+
+// ============ ACTIVITY LOGS MAIN COMPONENT ============
+const ActivityLogs = () => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('today');
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage] = useState(10);
+  const [refreshing, setRefreshing] = useState(false);
+  const [summary, setSummary] = useState({ total: 0, profileViews: 0, verifications: 0, errors: 0 });
 
   useEffect(() => {
     fetchLogs();
@@ -2391,6 +2585,9 @@ const ActivityLogs = () => {
       const response = await api.get(`/admin/logs?${params.toString()}`);
       setLogs(response.data.logs || []);
       setTotal(response.data.total || 0);
+      if (response.data.summary) {
+        setSummary(response.data.summary);
+      }
     } catch (error) {
       console.error('Failed to fetch logs:', error);
       setLogs([]);
@@ -2413,59 +2610,31 @@ const ActivityLogs = () => {
     fetchLogs(true);
   };
 
-  // Filter logs by search term on client side
-  const filteredLogs = searchTerm
-    ? logs.filter(log => 
-        log.action?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.actionType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (log.user?.name || log.user || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (log.details || '').toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : logs;
+  // Remove unused imports
 
-  // Get action icon based on action type
-  const getActionIcon = (actionType) => {
-    if (actionType?.includes('BLOCK')) return <Block sx={{ fontSize: 22 }} />;
-    if (actionType?.includes('UNBLOCK')) return <CheckCircle sx={{ fontSize: 22 }} />;
-    if (actionType?.includes('DELETE')) return <Delete sx={{ fontSize: 22 }} />;
-    if (actionType?.includes('VERIFICATION') || actionType?.includes('VERIFY')) return <VerifiedUser sx={{ fontSize: 22 }} />;
-    if (actionType?.includes('PHOTO')) return <PhotoCamera sx={{ fontSize: 22 }} />;
-    if (actionType?.includes('PAYMENT') || actionType?.includes('SUBSCRIPTION')) return <AttachMoney sx={{ fontSize: 22 }} />;
-    if (actionType?.includes('VIEW')) return <Visibility sx={{ fontSize: 22 }} />;
-    return <History sx={{ fontSize: 22 }} />;
-  };
-
-  // Get status badge color
-  const getStatusBadge = (actionType) => {
-    if (actionType?.includes('BLOCK') || actionType?.includes('DELETE') || actionType?.includes('REJECT')) {
-      return { color: '#ef4444', label: 'Error', bg: '#fef2f2' };
+  // Filter logs - apply today filter + search
+  const getFilteredLogs = () => {
+    let result = logs;
+    
+    // Filter by today's date if dateFilter is 'today'
+    if (dateFilter === 'today') {
+      result = filterTodayLogs(result);
     }
-    if (actionType?.includes('VIEW')) {
-      return { color: '#3b82f6', label: 'View', bg: '#eff6ff' };
+    
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(log => 
+        log.action?.toLowerCase().includes(term) ||
+        log.actionType?.toLowerCase().includes(term) ||
+        (log.user?.name || log.user || '').toLowerCase().includes(term)
+      );
     }
-    return { color: '#22c55e', label: 'Success', bg: '#f0fdf4' };
+    
+    return result;
   };
 
-  // Format timestamp properly
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return 'Invalid Date';
-    return date.toLocaleString('en-IN', { 
-      day: '2-digit', 
-      month: 'short', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // Get user name with fallback
-  const getUserName = (log) => {
-    if (log.user?.name) return log.user.name;
-    if (log.user) return log.user;
-    return 'Guest User';
-  };
+  const filteredLogs = getFilteredLogs();
 
   // Loading skeleton
   const LoadingSkeleton = () => (
@@ -2497,13 +2666,9 @@ const ActivityLogs = () => {
   );
 
   return (
-    <Box sx={{ 
-      minHeight: '100vh',
-      bgcolor: '#f8fafc',
-      p: { xs: 2, md: 3 }
-    }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc', p: { xs: 2, md: 3 } }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
           Activity Logs
         </Typography>
@@ -2512,122 +2677,38 @@ const ActivityLogs = () => {
         </Typography>
       </Box>
 
-      {/* Filter Bar - Modern Design */}
-      <Box sx={{ 
-        bgcolor: 'white', 
-        borderRadius: '16px', 
-        p: 2.5, 
-        mb: 3,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
-        border: '1px solid #e2e8f0'
-      }}>
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 2, 
-          flexWrap: 'wrap',
-          alignItems: 'center'
-        }}>
-          {/* Search Input */}
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search by action, user, or details"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            sx={{ 
-              flex: '1 1 250px',
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '10px',
-                bgcolor: '#f8fafc',
-                '& fieldset': { borderColor: '#e2e8f0' },
-                '&:hover fieldset': { borderColor: '#cbd5e1' },
-                '&.Mui-focused fieldset': { borderColor: '#8B5CF6', borderWidth: 2 }
-              }
-            }}
-            InputProps={{
-              startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: '#94a3b8' }} /></InputAdornment>,
-            }}
-          />
-          
-          {/* Action Type Dropdown */}
-          <FormControl size="small" sx={{ flex: '0 0 180px' }}>
-            <Select
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
-              displayEmpty
-              sx={{ 
-                borderRadius: '10px',
-                bgcolor: '#f8fafc',
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#8B5CF6', borderWidth: 2 }
-              }}
-              renderValue={(value) => value || 'All Actions'}
-            >
-              {actionTypes.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type === 'All Actions' ? 'All Actions' : type.replace(/_/g, ' ')}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          
-          {/* Date Range Dropdown */}
-          <FormControl size="small" sx={{ flex: '0 0 150px' }}>
-            <Select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              sx={{ 
-                borderRadius: '10px',
-                bgcolor: '#f8fafc',
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#8B5CF6', borderWidth: 2 }
-              }}
-            >
-              {dateRangeOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          
-          {/* Reset Button */}
-          <Button
-            variant="outlined"
-            onClick={handleReset}
-            sx={{ 
-              borderRadius: '10px',
-              borderColor: '#e2e8f0',
-              color: '#64748b',
-              textTransform: 'none',
-              px: 2,
-              '&:hover': {
-                borderColor: '#cbd5e1',
-                bgcolor: '#f8fafc'
-              }
-            }}
-          >
-            Reset
-          </Button>
-          
-          {/* Refresh Button */}
-          <IconButton 
-            onClick={handleRefresh} 
-            disabled={refreshing}
-            sx={{ 
-              bgcolor: '#8B5CF6',
-              color: 'white',
-              borderRadius: '10px',
-              '&:hover': { bgcolor: '#7c3aed' },
-              '&:disabled': { bgcolor: '#cbd5e1' }
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
+      {/* Summary Stats */}
+      <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ bgcolor: 'white', borderRadius: '10px', px: 2, py: 1, border: '1px solid #e2e8f0', flex: '1 1 100px' }}>
+          <Typography sx={{ color: '#64748b', fontSize: '0.75rem' }}>Total Today</Typography>
+          <Typography sx={{ fontWeight: 700, color: '#1e293b', fontSize: '1.25rem' }}>{summary.total}</Typography>
+        </Box>
+        <Box sx={{ bgcolor: 'white', borderRadius: '10px', px: 2, py: 1, border: '1px solid #e2e8f0', flex: '1 1 100px' }}>
+          <Typography sx={{ color: '#64748b', fontSize: '0.75rem' }}>Profile Views</Typography>
+          <Typography sx={{ fontWeight: 700, color: '#3b82f6', fontSize: '1.25rem' }}>{summary.profileViews}</Typography>
+        </Box>
+        <Box sx={{ bgcolor: 'white', borderRadius: '10px', px: 2, py: 1, border: '1px solid #e2e8f0', flex: '1 1 100px' }}>
+          <Typography sx={{ color: '#64748b', fontSize: '0.75rem' }}>Verifications</Typography>
+          <Typography sx={{ fontWeight: 700, color: '#22c55e', fontSize: '1.25rem' }}>{summary.verifications}</Typography>
+        </Box>
+        <Box sx={{ bgcolor: 'white', borderRadius: '10px', px: 2, py: 1, border: '1px solid #e2e8f0', flex: '1 1 100px' }}>
+          <Typography sx={{ color: '#64748b', fontSize: '0.75rem' }}>Errors</Typography>
+          <Typography sx={{ fontWeight: 700, color: '#ef4444', fontSize: '1.25rem' }}>{summary.errors}</Typography>
         </Box>
       </Box>
+
+      {/* Filter Bar */}
+      <FilterBar
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        actionFilter={actionFilter}
+        setActionFilter={setActionFilter}
+        dateFilter={dateFilter}
+        setDateFilter={setDateFilter}
+        onReset={handleReset}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+      />
 
       {/* Activity Logs Cards */}
       {loading ? (
@@ -2667,101 +2748,10 @@ const ActivityLogs = () => {
               </Typography>
             </Box>
           ) : (
-            /* Activity Cards */
             <Box>
-              {filteredLogs.map((log) => {
-                const status = getStatusBadge(log.actionType);
-                return (
-                  <Box
-                    key={log.id}
-                    sx={{
-                      bgcolor: 'white',
-                      borderRadius: '12px',
-                      p: 2.5,
-                      mb: 2,
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-                      border: '1px solid #e2e8f0',
-                      transition: 'all 0.2s ease',
-                      cursor: 'pointer',
-                      '&:hover': {
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                        transform: 'translateY(-1px)',
-                        borderColor: '#cbd5e1'
-                      }
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                      {/* Icon */}
-                      <Box sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '12px',
-                        bgcolor: status.bg,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        {getActionIcon(log.actionType)}
-                      </Box>
-                      
-                      {/* Content */}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
-                          <Typography sx={{ 
-                            fontWeight: 600, 
-                            color: '#1e293b',
-                            fontSize: '0.95rem'
-                          }}>
-                            {log.actionType?.replace(/_/g, ' ') || log.action || 'Activity'}
-                          </Typography>
-                          <Box sx={{
-                            px: 1.5,
-                            py: 0.25,
-                            borderRadius: '6px',
-                            bgcolor: status.bg,
-                            color: status.color,
-                            fontSize: '0.7rem',
-                            fontWeight: 600,
-                            textTransform: 'uppercase'
-                          }}>
-                            {status.label}
-                          </Box>
-                        </Box>
-                        
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                          <Person sx={{ fontSize: 14, color: '#64748b' }} />
-                          <Typography sx={{ color: '#334155', fontWeight: 500, fontSize: '0.875rem' }}>
-                            {getUserName(log)}
-                          </Typography>
-                          {log.targetUserId && (
-                            <Typography sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                              (ID: {log.targetUserId?.slice(0, 8)}...)
-                            </Typography>
-                          )}
-                        </Box>
-                        
-                        {log.details && (
-                          <Typography sx={{ color: '#64748b', fontSize: '0.8rem', mb: 0.5 }}>
-                            {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
-                          </Typography>
-                        )}
-                      </Box>
-                      
-                      {/* Timestamp */}
-                      <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                        <Typography sx={{ 
-                          color: '#475569', 
-                          fontWeight: 500,
-                          fontSize: '0.85rem'
-                        }}>
-                          {formatTimestamp(log.timestamp)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                );
-              })}
+              {filteredLogs.map((log) => (
+                <LogCard key={log.id} log={log} />
+              ))}
               
               {/* Pagination */}
               {total > rowsPerPage && (

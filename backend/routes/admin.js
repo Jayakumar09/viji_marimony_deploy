@@ -246,7 +246,9 @@ router.get('/logs', async (req, res) => {
     if (!startDate && !endDate) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      where.createdAt = { gte: today };
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      where.createdAt = { gte: today, lt: tomorrow };
     } else if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
@@ -283,33 +285,50 @@ router.get('/logs', async (req, res) => {
       try {
         details = log.details ? JSON.parse(log.details) : {};
       } catch (e) {
-        details = { raw: log.details };
+        details = {};
       }
       
-      // Format action for display
-      let displayAction = log.action.replace(/_/g, ' ').toLowerCase();
-      displayAction = displayAction.charAt(0).toUpperCase() + displayAction.slice(1);
+      // Get user name with proper priority
+      const userName = details.userName || details.userEmail || null;
+      const adminName = log.admin?.name || log.admin?.email || null;
       
       return {
         id: log.id,
-        action: displayAction,
+        action: log.action.replace(/_/g, ' '),
         actionType: log.action,
-        user: { 
-          name: details.userName || details.userEmail || log.admin?.name || log.admin?.email || 'Guest User'
-        },
+        user: userName || adminName || 'Guest User',
         targetUserId: log.targetUserId,
         timestamp: log.createdAt,
-        details: details.raw || `${displayAction} - ${JSON.stringify(details)}`,
-        admin: log.admin ? `${log.admin.name} (${log.admin.email})` : 'System',
-        ipAddress: log.ipAddress
+        details: details,
+        admin: adminName || 'System'
       };
     });
+    
+    // Get summary stats for today
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    const allTodayLogs = await prisma.adminActivityLog.findMany({
+      where: {
+        createdAt: { gte: todayStart, lte: todayEnd }
+      }
+    });
+    
+    const summary = {
+      total: allTodayLogs.length,
+      profileViews: allTodayLogs.filter(l => l.action === 'VIEW_USER_PROFILE').length,
+      verifications: allTodayLogs.filter(l => l.action.includes('VERIFICATION') || l.action.includes('PHOTO')).length,
+      errors: allTodayLogs.filter(l => l.action.includes('REJECT') || l.action.includes('DELETE') || l.action.includes('BLOCK')).length
+    };
     
     res.json({ 
       logs: transformedLogs,
       total,
       limit: parseInt(limit),
-      offset: parseInt(offset)
+      offset: parseInt(offset),
+      summary
     });
   } catch (error) {
     console.error('Get activity logs error:', error);
