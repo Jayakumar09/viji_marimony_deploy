@@ -2653,7 +2653,24 @@ const ActivityLogs = () => {
     return result;
   };
 
-  const filteredLogs = getFilteredLogs();
+  // Temporary test log flag
+  const SHOW_TEST_LOG = true;
+
+  // Add test log if enabled and no logs
+  const displayLogs = (() => {
+    if (SHOW_TEST_LOG && filteredLogs.length === 0) {
+      return [{
+        id: 'test-001',
+        action: 'VIEW USER PROFILE',
+        actionType: 'VIEW_USER_PROFILE',
+        user: 'Guest User',
+        targetUserId: 'TEST123',
+        timestamp: new Date().toISOString(),
+        admin: 'System'
+      }];
+    }
+    return filteredLogs;
+  })();
 
   // Loading skeleton
   const LoadingSkeleton = () => (
@@ -2768,7 +2785,7 @@ const ActivityLogs = () => {
             </Box>
           ) : (
             <Box>
-              {filteredLogs.map((log) => (
+              {displayLogs.map((log) => (
                 <LogCard key={log.id} log={log} />
               ))}
               
