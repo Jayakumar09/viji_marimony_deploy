@@ -2313,75 +2313,97 @@ const SubscriptionManagement = () => {
 };
 
 // ============ ACTIVITY LOGS HELPER FUNCTIONS ============
-
 // Format activity date with local timezone
 const formatActivityDate = (log) => {
-  if (!log.timestamp) return '';
+  if (!log?.timestamp) return "";
   const date = new Date(log.timestamp);
-  if (isNaN(date.getTime())) return '';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
   });
 };
 
 // Filter only today's logs
-const filterTodayLogs = (logs) => {
+const filterTodayLogs = (logs = []) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  
-  return logs.filter(log => {
+
+  return logs.filter((log) => {
+    if (!log?.timestamp) return false;
     const logDate = new Date(log.timestamp);
+    if (isNaN(logDate.getTime())) return false;
     return logDate >= today && logDate < tomorrow;
   });
+};
+
+// Temporary sample log for testing when no real logs exist today
+const SHOW_TEST_LOG = true;
+
+const sampleLog = {
+  id: "test-1",
+  action: "VIEW USER PROFILE",
+  actionType: "VIEW_USER_PROFILE",
+  user: "Guest User",
+  targetUserId: "TEST12345",
+  timestamp: new Date().toISOString(),
+  admin: "System",
+};
+
+// Use this before rendering your list
+const getDisplayLogs = (logs = []) => {
+  const todayLogs = filterTodayLogs(logs);
+  if (todayLogs.length > 0) return todayLogs;
+  return SHOW_TEST_LOG ? [sampleLog] : [];
 };
 
 // ============ REUSABLE LOG CARD COMPONENT ============
 const LogCard = ({ log }) => {
   const getActionIcon = (actionType) => {
-    if (actionType?.includes('BLOCK')) return <Block sx={{ fontSize: 18 }} />;
-    if (actionType?.includes('UNBLOCK')) return <CheckCircle sx={{ fontSize: 18 }} />;
-    if (actionType?.includes('DELETE')) return <Delete sx={{ fontSize: 18 }} />;
-    if (actionType?.includes('VERIFICATION') || actionType?.includes('VERIFY')) return <VerifiedUser sx={{ fontSize: 18 }} />;
-    if (actionType?.includes('PHOTO')) return <PhotoCamera sx={{ fontSize: 18 }} />;
-    if (actionType?.includes('PAYMENT') || actionType?.includes('SUBSCRIPTION')) return <AttachMoney sx={{ fontSize: 18 }} />;
-    if (actionType?.includes('VIEW')) return <Visibility sx={{ fontSize: 18 }} />;
+    if (actionType?.includes("BLOCK")) return <Block sx={{ fontSize: 18 }} />;
+    if (actionType?.includes("UNBLOCK")) return <CheckCircle sx={{ fontSize: 18 }} />;
+    if (actionType?.includes("DELETE")) return <Delete sx={{ fontSize: 18 }} />;
+    if (actionType?.includes("VERIFICATION") || actionType?.includes("VERIFY")) {
+      return <VerifiedUser sx={{ fontSize: 18 }} />;
+    }
+    if (actionType?.includes("PHOTO")) return <PhotoCamera sx={{ fontSize: 18 }} />;
+    if (actionType?.includes("PAYMENT") || actionType?.includes("SUBSCRIPTION")) {
+      return <AttachMoney sx={{ fontSize: 18 }} />;
+    }
+    if (actionType?.includes("VIEW")) return <Visibility sx={{ fontSize: 18 }} />;
     return <History sx={{ fontSize: 18 }} />;
   };
 
   const getStatusBadge = (actionType) => {
-    if (actionType?.includes('BLOCK') || actionType?.includes('DELETE') || actionType?.includes('REJECT')) {
-      return { color: '#ef4444', label: 'Error', bg: '#fef2f2' };
+    if (actionType?.includes("BLOCK") || actionType?.includes("DELETE") || actionType?.includes("REJECT")) {
+      return { color: "#ef4444", label: "Error", bg: "#fef2f2" };
     }
-    if (actionType?.includes('VIEW')) {
-      return { color: '#3b82f6', label: 'View', bg: '#eff6ff' };
+    if (actionType?.includes("VIEW")) {
+      return { color: "#3b82f6", label: "View", bg: "#eff6ff" };
     }
-    return { color: '#22c55e', label: 'Success', bg: '#f0fdf4' };
+    return { color: "#22c55e", label: "Success", bg: "#f0fdf4" };
   };
 
-  // Get user name - use actual name, fallback to Guest User
-  const userName = log.user?.name || log.user || 'Guest User';
-  
-  // Get timestamp from log.timestamp
-  const getTimestamp = () => {
-    if (!log.timestamp) return null;
+  const userName = log?.user?.name || log?.user || "Guest User";
 
+  const getTimestamp = () => {
+    if (!log?.timestamp) return null;
     const date = new Date(log.timestamp);
     return isNaN(date.getTime()) ? null : date;
   };
 
   const timestamp = getTimestamp();
-  const status = getStatusBadge(log.actionType);
+  const status = getStatusBadge(log?.actionType);
 
-  // Format with toLocaleString (safe)
   const formatTime = (date) => {
     if (!date) return "N/A";
-
     return date.toLocaleString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -2392,80 +2414,88 @@ const LogCard = ({ log }) => {
     });
   };
 
-  // Format relative time
   const getRelativeTime = (date) => {
-    if (!date) return '';
+    if (!date) return "N/A";
     const now = new Date();
     const diff = now - date;
     const mins = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
-    if (mins < 1) return 'Just now';
+
+    if (mins < 1) return "Just now";
     if (mins < 60) return `${mins}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return formatTime(date);
   };
 
   return (
-    <Box sx={{
-      bgcolor: 'white',
-      borderRadius: '10px',
-      p: 1.5,
-      mb: 1.5,
-      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      border: '1px solid #e2e8f0',
-      transition: 'all 0.2s ease',
-      '&:hover': {
-        boxShadow: '0 3px 8px rgba(0,0,0,0.08)',
-        borderColor: '#cbd5e1'
-      }
-    }}>
-      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-        {/* Icon */}
-        <Box sx={{
-          width: 36,
-          height: 36,
-          borderRadius: '10px',
-          bgcolor: status.bg,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          color: status.color
-        }}>
-          {getActionIcon(log.actionType)}
+    <Box
+      sx={{
+        bgcolor: "white",
+        borderRadius: "10px",
+        p: 1.5,
+        mb: 1.5,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        border: "1px solid #e2e8f0",
+        transition: "all 0.2s ease",
+        "&:hover": {
+          boxShadow: "0 3px 8px rgba(0,0,0,0.08)",
+          borderColor: "#cbd5e1",
+        },
+      }}
+    >
+      <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: "10px",
+            bgcolor: status.bg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            color: status.color,
+          }}
+        >
+          {getActionIcon(log?.actionType)}
         </Box>
-        
-        {/* Content */}
+
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          {/* Action Title */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
-            <Typography sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>
-              {log.actionType?.replace(/_/g, ' ') || log.action || 'Activity'}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.25 }}>
+            <Typography sx={{ fontWeight: 600, color: "#1e293b", fontSize: "0.875rem" }}>
+              {log?.actionType?.replace(/_/g, " ") || log?.action || "Activity"}
             </Typography>
-            <Box sx={{ px: 1, py: 0.125, borderRadius: '4px', bgcolor: status.bg, color: status.color, fontSize: '0.65rem', fontWeight: 600 }}>
+            <Box
+              sx={{
+                px: 1,
+                py: 0.125,
+                borderRadius: "4px",
+                bgcolor: status.bg,
+                color: status.color,
+                fontSize: "0.65rem",
+                fontWeight: 600,
+              }}
+            >
               {status.label}
             </Box>
           </Box>
-          
-          {/* User Name */}
-          <Typography sx={{ color: '#334155', fontWeight: 500, fontSize: '0.8rem', mb: 0.25 }}>
+
+          <Typography sx={{ color: "#334155", fontWeight: 500, fontSize: "0.8rem", mb: 0.25 }}>
             {userName}
           </Typography>
-          
-          {/* Target ID */}
-          {log.targetUserId && (
-            <Typography sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
-              ID: {log.targetUserId?.slice(0, 8)}...
+
+          {log?.targetUserId && (
+            <Typography sx={{ color: "#94a3b8", fontSize: "0.7rem" }}>
+              ID: {String(log.targetUserId).slice(0, 8)}...
             </Typography>
           )}
         </Box>
-        
-        {/* Timestamp */}
-        <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-          <Typography sx={{ color: '#475569', fontWeight: 500, fontSize: '0.8rem' }}>
-            {timestamp ? getRelativeTime(timestamp) : "N/A"}
+
+        <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+          <Typography sx={{ color: "#475569", fontWeight: 500, fontSize: "0.8rem" }}>
+            {getRelativeTime(timestamp)}
           </Typography>
-          <Typography sx={{ color: '#94a3b8', fontSize: '0.65rem' }}>
+          <Typography sx={{ color: "#94a3b8", fontSize: "0.65rem" }}>
             {formatTime(timestamp)}
           </Typography>
         </Box>
@@ -2473,7 +2503,6 @@ const LogCard = ({ log }) => {
     </Box>
   );
 };
-
 // ============ REUSABLE FILTER BAR COMPONENT ============
 const FilterBar = ({ searchTerm, setSearchTerm, actionFilter, setActionFilter, dateFilter, setDateFilter, onReset, onRefresh, refreshing }) => {
   const actionTypes = [
