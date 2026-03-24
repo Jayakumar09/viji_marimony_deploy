@@ -2751,7 +2751,7 @@ const ActivityLogs = () => {
         <LoadingSkeleton />
       ) : (
         <>
-          {filteredLogs.length === 0 ? (
+          {displayLogs.length === 0 ? (
             /* Empty State */
             <Box sx={{ 
               textAlign: 'center', 
@@ -2799,7 +2799,7 @@ const ActivityLogs = () => {
                   px: 1
                 }}>
                   <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
-                    Showing {filteredLogs.length} of {total} activities
+                    Showing {displayLogs.length} of {total} activities
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
