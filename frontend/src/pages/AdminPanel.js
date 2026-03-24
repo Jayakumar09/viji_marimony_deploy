@@ -2686,6 +2686,7 @@ const ActivityLogs = () => {
   const SHOW_TEST_LOG = true;
 
   // Add test log if enabled and no logs
+  const filteredLogs = getFilteredLogs();
   const displayLogs = (() => {
     if (SHOW_TEST_LOG && filteredLogs.length === 0) {
       return [{
