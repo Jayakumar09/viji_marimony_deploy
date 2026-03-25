@@ -904,16 +904,20 @@ const checkAllPhotosVerified = async (userId) => {
  */
 const logAdminActivity = async ({ adminId, action, targetUserId, details }) => {
   try {
+    // Ensure adminId exists - use fallback if not
+    const safeAdminId = adminId || 'system-admin';
+    
     await prisma.adminActivityLog.create({
       data: {
-        adminId,
+        adminId: safeAdminId,
         action,
         targetUserId,
-        details: JSON.stringify(details)
+        details: JSON.stringify(details || {})
       }
     });
+    console.log('[ActivityLog] Created:', { adminId: safeAdminId, action, targetUserId });
   } catch (error) {
-    console.error('Log admin activity error:', error);
+    console.error('[ActivityLog] Error:', error.message);
   }
 };
 

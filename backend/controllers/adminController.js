@@ -356,7 +356,7 @@ const updateUserVerification = async (req, res) => {
 const verifyUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const adminId = req.admin.id;
+    const adminId = req.admin ? req.admin.id : 'system-admin';
     
     const user = await prisma.user.findUnique({ where: { id } });
     
@@ -373,18 +373,23 @@ const verifyUser = async (req, res) => {
     });
     
     // Log admin activity
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId,
-        action: 'PROFILE_VERIFICATION_APPROVED',
-        targetUserId: id,
-        details: JSON.stringify({
-          userName: `${user.firstName} ${user.lastName}`,
-          previousStatus: user.isVerified ? 'Verified' : 'Not Verified',
-          newStatus: 'Verified'
-        })
-      }
-    });
+    try {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId,
+          action: 'PROFILE_VERIFICATION_APPROVED',
+          targetUserId: id,
+          details: JSON.stringify({
+            userName: `${user.firstName} ${user.lastName}`,
+            previousStatus: user.isVerified ? 'Verified' : 'Not Verified',
+            newStatus: 'Verified'
+          })
+        }
+      });
+      console.log('[verifyUser] Activity log created for user:', user.firstName, user.lastName);
+    } catch (logError) {
+      console.error('[verifyUser] Failed to create activity log:', logError.message);
+    }
     
     res.json({ 
       success: true, 
@@ -703,7 +708,7 @@ const getPendingProfileVerifications = async (req, res) => {
 const approveProfileVerification = async (req, res) => {
   try {
     const { userId } = req.params;
-    const adminId = req.admin.id;
+    const adminId = req.admin ? req.admin.id : 'system-admin';
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -737,18 +742,23 @@ const approveProfileVerification = async (req, res) => {
     });
     
     // Log admin activity
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId,
-        action: 'PROFILE_VERIFICATION_APPROVED',
-        targetUserId: userId,
-        details: JSON.stringify({
-          previousStatus: user.profileVerificationStatus,
-          newStatus: 'Profile Verified',
-          userName: `${user.firstName} ${user.lastName}`
-        })
-      }
-    });
+    try {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId,
+          action: 'PROFILE_VERIFICATION_APPROVED',
+          targetUserId: userId,
+          details: JSON.stringify({
+            previousStatus: user.profileVerificationStatus,
+            newStatus: 'Profile Verified',
+            userName: `${user.firstName} ${user.lastName}`
+          })
+        }
+      });
+      console.log('[approveProfileVerification] Activity log created for:', user.firstName, user.lastName);
+    } catch (logError) {
+      console.error('[approveProfileVerification] Failed to create activity log:', logError.message);
+    }
     
     // Send approval email to user
     try {

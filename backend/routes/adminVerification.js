@@ -135,7 +135,7 @@ router.post('/verifications/:id/approve', async (req, res) => {
   try {
     const { id } = req.params;
     const { notes } = req.body;
-    const adminId = req.user.id;
+    const adminId = req.user ? req.user.id : (req.admin ? req.admin.id : 'system-admin');
 
     const verification = await prisma.verification.findUnique({
       where: { id }
@@ -169,18 +169,23 @@ router.post('/verifications/:id/approve', async (req, res) => {
     });
 
     // Log admin activity
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId,
-        action: 'PROFILE_VERIFICATION_APPROVED',
-        targetUserId: verification.userId,
-        details: JSON.stringify({
-          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
-          previousStatus: verification.status,
-          newStatus: 'APPROVED'
-        })
-      }
-    });
+    try {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId,
+          action: 'PROFILE_VERIFICATION_APPROVED',
+          targetUserId: verification.userId,
+          details: JSON.stringify({
+            userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+            previousStatus: verification.status,
+            newStatus: 'APPROVED'
+          })
+        }
+      });
+      console.log('[verifications/approve] Activity log created for:', user ? user.firstName : 'Unknown');
+    } catch (logError) {
+      console.error('[verifications/approve] Failed to create activity log:', logError.message);
+    }
 
     res.json({
       message: 'Verification approved successfully',
