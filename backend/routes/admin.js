@@ -318,6 +318,7 @@ router.get('/logs', async (req, res) => {
       
       // Get target user details if available
       const targetUser = log.targetUserId ? userMap[log.targetUserId] : null;
+      console.log('[ActivityLogs] Processing log:', { targetUserId: log.targetUserId, targetUser });
       const targetUserName = targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : null;
       const targetUserCustomId = targetUser?.customId || null;
 
@@ -325,7 +326,7 @@ router.get('/logs', async (req, res) => {
         id: log.id,
         action: log.action.replace(/_/g, " "),
         actionType: log.action,
-        user: userName || targetUserName || adminName || "Guest User",
+        user: targetUserName || userName || adminName || "Guest User",
         targetUserId: targetUserCustomId || log.targetUserId || "Guest User",
         timestamp: timestamp,
         admin: adminName || "System"
