@@ -235,6 +235,8 @@ router.get('/logs', async (req, res) => {
     const { prisma } = require('../utils/database');
     const { action, startDate, endDate, limit = 10, offset = 0 } = req.query;
     
+    console.log('[ActivityLogs] Request params:', { action, startDate, endDate, limit, offset });
+    
     // Build where clause
     const where = {};
     
@@ -249,15 +251,19 @@ router.get('/logs', async (req, res) => {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       where.createdAt = { gte: today, lt: tomorrow };
+      console.log('[ActivityLogs] Using today filter:', { today: today.toISOString(), tomorrow: tomorrow.toISOString() });
     } else if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
         where.createdAt.gte = new Date(startDate);
+        console.log('[ActivityLogs] startDate:', startDate);
       }
       if (endDate) {
         where.createdAt.lte = new Date(endDate);
       }
     }
+    
+    console.log('[ActivityLogs] Query where:', JSON.stringify(where));
     
     // Get logs with admin info
     const logs = await prisma.adminActivityLog.findMany({
@@ -276,8 +282,11 @@ router.get('/logs', async (req, res) => {
       skip: parseInt(offset)
     });
     
+    console.log('[ActivityLogs] Found logs:', logs.length);
+    
     // Get total count for pagination
     const total = await prisma.adminActivityLog.count({ where });
+    console.log('[ActivityLogs] Total count:', total);
     
     // Transform logs for frontend display
     const transformedLogs = logs.map((log) => {
