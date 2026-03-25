@@ -261,7 +261,7 @@ router.get('/logs', async (req, res) => {
     
     console.log('[ActivityLogs] Query where:', JSON.stringify(where));
     
-    // Get logs with admin info
+    // Get logs with admin info and user info
     const logs = await prisma.adminActivityLog.findMany({
       where,
       include: {
@@ -284,6 +284,18 @@ router.get('/logs', async (req, res) => {
     const total = await prisma.adminActivityLog.count({ where });
     console.log('[ActivityLogs] Total count:', total);
     
+    // Get all unique target user IDs to fetch user details
+    const targetUserIds = [...new Set(logs.map(log => log.targetUserId).filter(Boolean))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: targetUserIds } },
+      select: { id: true, firstName: true, lastName: true }
+    });
+    const userMap = users.reduce((acc, user) => {
+      acc[user.id] = user;
+      return acc;
+    }, {});
+    console.log('[ActivityLogs] User map:', userMap);
+    
     // Transform logs for frontend display
     const transformedLogs = logs.map((log) => {
       let details = {};
@@ -300,15 +312,19 @@ router.get('/logs', async (req, res) => {
       const rawTimestamp = details.viewedAt || details.createdAt || log.createdAt;
       const timestamp = rawTimestamp ? (typeof rawTimestamp === 'string' ? rawTimestamp : rawTimestamp.toISOString()) : (log.createdAt ? log.createdAt.toISOString() : null);
 
-      // Get user name with proper priority - from details, then admin, then fallback
+      // Get user name - from details, then from userMap, then from admin
       const userName = details.userName || details.userEmail || null;
       const adminName = log.admin?.name || log.admin?.email || null;
+      
+      // Get target user details if available
+      const targetUser = log.targetUserId ? userMap[log.targetUserId] : null;
+      const targetUserName = targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : null;
 
       return {
         id: log.id,
         action: log.action.replace(/_/g, " "),
         actionType: log.action,
-        user: userName || adminName || log.targetUserId || "Guest User",
+        user: userName || targetUserName || adminName || log.targetUserId || "Guest User",
         targetUserId: log.targetUserId,
         timestamp: timestamp,
         admin: adminName || "System"
