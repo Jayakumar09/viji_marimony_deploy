@@ -145,6 +145,12 @@ router.post('/verifications/:id/approve', async (req, res) => {
       return res.status(404).json({ error: 'Verification not found' });
     }
 
+    // Get user details for logging
+    const user = await prisma.user.findUnique({
+      where: { id: verification.userId },
+      select: { firstName: true, lastName: true }
+    });
+
     // Update verification status
     const updated = await prisma.verification.update({
       where: { id },
@@ -160,6 +166,20 @@ router.post('/verifications/:id/approve', async (req, res) => {
     await prisma.user.update({
       where: { id: verification.userId },
       data: { isVerified: true }
+    });
+
+    // Log admin activity
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId,
+        action: 'PROFILE_VERIFICATION_APPROVED',
+        targetUserId: verification.userId,
+        details: JSON.stringify({
+          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          previousStatus: verification.status,
+          newStatus: 'APPROVED'
+        })
+      }
     });
 
     res.json({

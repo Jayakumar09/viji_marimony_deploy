@@ -356,6 +356,7 @@ const updateUserVerification = async (req, res) => {
 const verifyUser = async (req, res) => {
   try {
     const { id } = req.params;
+    const adminId = req.admin.id;
     
     const user = await prisma.user.findUnique({ where: { id } });
     
@@ -368,6 +369,20 @@ const verifyUser = async (req, res) => {
       data: {
         isVerified: true,
         photosVerified: true
+      }
+    });
+    
+    // Log admin activity
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId,
+        action: 'PROFILE_VERIFICATION_APPROVED',
+        targetUserId: id,
+        details: JSON.stringify({
+          userName: `${user.firstName} ${user.lastName}`,
+          previousStatus: user.isVerified ? 'Verified' : 'Not Verified',
+          newStatus: 'Verified'
+        })
       }
     });
     
