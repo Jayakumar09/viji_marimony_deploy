@@ -2581,7 +2581,7 @@ const ActivityLogs = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('');
-  const [dateFilter, setDateFilter] = useState('today');
+  const [dateFilter, setDateFilter] = useState('all');
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(10);
@@ -2604,11 +2604,11 @@ const ActivityLogs = () => {
       params.append('limit', rowsPerPage);
       params.append('offset', page * rowsPerPage);
       
-      // Default to today if no filter selected
-      const filterToUse = dateFilter || 'today';
+      // Only add date filter if explicitly selected (not 'all')
+      const filterToUse = dateFilter || 'all';
       console.log('[ActivityLogs] Fetching with filter:', filterToUse);
       
-      if (filterToUse && filterToUse !== 'all') {
+      if (filterToUse !== 'all') {
         const today = new Date();
         let startDate;
         
@@ -2630,6 +2630,8 @@ const ActivityLogs = () => {
           params.append('startDate', startDate.toISOString());
           console.log('[ActivityLogs] startDate:', startDate.toISOString());
         }
+      } else {
+        console.log('[ActivityLogs] No date filter - fetching all logs');
       }
       
       console.log('[ActivityLogs] Request URL:', `/admin/logs?${params.toString()}`);
@@ -2654,7 +2656,7 @@ const ActivityLogs = () => {
   const handleReset = () => {
     setSearchTerm('');
     setActionFilter('');
-    setDateFilter('today');
+    setDateFilter('all');
     setPage(0);
   };
 

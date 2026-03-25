@@ -237,22 +237,16 @@ router.get('/logs', async (req, res) => {
     
     console.log('[ActivityLogs] Request params:', { action, startDate, endDate, limit, offset });
     
-    // Build where clause
+    // Build where clause - NO date filter by default (show all)
     const where = {};
     
     if (action) {
       where.action = { contains: action };
+      console.log('[ActivityLogs] Filtering by action:', action);
     }
     
-    // Default to today's logs if no date filter provided
-    if (!startDate && !endDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      where.createdAt = { gte: today, lt: tomorrow };
-      console.log('[ActivityLogs] Using today filter:', { today: today.toISOString(), tomorrow: tomorrow.toISOString() });
-    } else if (startDate || endDate) {
+    // Only apply date filter if explicitly provided
+    if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
         where.createdAt.gte = new Date(startDate);
@@ -261,6 +255,8 @@ router.get('/logs', async (req, res) => {
       if (endDate) {
         where.createdAt.lte = new Date(endDate);
       }
+    } else {
+      console.log('[ActivityLogs] No date filter - showing all logs');
     }
     
     console.log('[ActivityLogs] Query where:', JSON.stringify(where));
