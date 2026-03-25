@@ -292,12 +292,15 @@ router.get('/logs', async (req, res) => {
       } catch (e) {
         details = {};
       }
+      
+      console.log('[ActivityLogs] Raw log:', JSON.stringify(log));
+      console.log('[ActivityLogs] Parsed details:', details);
 
       // Get timestamp - ensure it's in ISO format
       const rawTimestamp = details.viewedAt || details.createdAt || log.createdAt;
       const timestamp = rawTimestamp ? (typeof rawTimestamp === 'string' ? rawTimestamp : rawTimestamp.toISOString()) : (log.createdAt ? log.createdAt.toISOString() : null);
 
-      // Get user name with proper priority
+      // Get user name with proper priority - from details, then admin, then fallback
       const userName = details.userName || details.userEmail || null;
       const adminName = log.admin?.name || log.admin?.email || null;
 
@@ -305,7 +308,7 @@ router.get('/logs', async (req, res) => {
         id: log.id,
         action: log.action.replace(/_/g, " "),
         actionType: log.action,
-        user: userName || adminName || "Guest User",
+        user: userName || adminName || log.targetUserId || "Guest User",
         targetUserId: log.targetUserId,
         timestamp: timestamp,
         admin: adminName || "System"

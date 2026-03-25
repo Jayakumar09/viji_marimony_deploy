@@ -2636,6 +2636,7 @@ const ActivityLogs = () => {
       
       console.log('[ActivityLogs] Request URL:', `/admin/logs?${params.toString()}`);
       const response = await api.get(`/admin/logs?${params.toString()}`);
+      console.log('[ActivityLogs] Full Response:', JSON.stringify(response.data, null, 2));
       console.log('[ActivityLogs] Response:', response.data);
       
       setLogs(response.data.logs || []);
