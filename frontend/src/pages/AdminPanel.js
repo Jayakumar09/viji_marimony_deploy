@@ -2486,7 +2486,7 @@ const LogCard = ({ log }) => {
 
           {log?.targetUserId && (
             <Typography sx={{ color: "#94a3b8", fontSize: "0.7rem" }}>
-              ID: {String(log.targetUserId).slice(0, 8)}...
+              ID: {log.targetUserId}
             </Typography>
           )}
         </Box>
@@ -2637,6 +2637,7 @@ const ActivityLogs = () => {
       console.log('[ActivityLogs] Request URL:', `/admin/logs?${params.toString()}`);
       const response = await api.get(`/admin/logs?${params.toString()}`);
       console.log('[ActivityLogs] Full Response:', JSON.stringify(response.data, null, 2));
+      console.log('[ActivityLogs] Logs in response:', JSON.stringify(response.data.logs, null, 2));
       console.log('[ActivityLogs] Response:', response.data);
       
       setLogs(response.data.logs || []);
