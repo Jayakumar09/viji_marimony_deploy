@@ -288,7 +288,7 @@ router.get('/logs', async (req, res) => {
     const targetUserIds = [...new Set(logs.map(log => log.targetUserId).filter(Boolean))];
     const users = await prisma.user.findMany({
       where: { id: { in: targetUserIds } },
-      select: { id: true, firstName: true, lastName: true }
+      select: { id: true, firstName: true, lastName: true, customId: true }
     });
     const userMap = users.reduce((acc, user) => {
       acc[user.id] = user;
@@ -319,13 +319,14 @@ router.get('/logs', async (req, res) => {
       // Get target user details if available
       const targetUser = log.targetUserId ? userMap[log.targetUserId] : null;
       const targetUserName = targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : null;
+      const targetUserCustomId = targetUser?.customId || null;
 
       return {
         id: log.id,
         action: log.action.replace(/_/g, " "),
         actionType: log.action,
-        user: userName || targetUserName || adminName || log.targetUserId || "Guest User",
-        targetUserId: log.targetUserId,
+        user: userName || targetUserName || adminName || "Guest User",
+        targetUserId: targetUserCustomId || log.targetUserId || "Guest User",
         timestamp: timestamp,
         admin: adminName || "System"
       };
