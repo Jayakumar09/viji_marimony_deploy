@@ -2682,8 +2682,8 @@ const ActivityLogs = () => {
     return result;
   };
 
-  // Temporary test log flag
-  const SHOW_TEST_LOG = true;
+  // Temporary test log flag - disabled for production
+  const SHOW_TEST_LOG = false;
 
   // Add test log if enabled and no logs
   const filteredLogs = getFilteredLogs();
