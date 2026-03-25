@@ -2606,6 +2606,7 @@ const ActivityLogs = () => {
       
       // Default to today if no filter selected
       const filterToUse = dateFilter || 'today';
+      console.log('[ActivityLogs] Fetching with filter:', filterToUse);
       
       if (filterToUse && filterToUse !== 'all') {
         const today = new Date();
@@ -2627,17 +2628,21 @@ const ActivityLogs = () => {
         
         if (startDate) {
           params.append('startDate', startDate.toISOString());
+          console.log('[ActivityLogs] startDate:', startDate.toISOString());
         }
       }
       
+      console.log('[ActivityLogs] Request URL:', `/admin/logs?${params.toString()}`);
       const response = await api.get(`/admin/logs?${params.toString()}`);
+      console.log('[ActivityLogs] Response:', response.data);
+      
       setLogs(response.data.logs || []);
       setTotal(response.data.total || 0);
       if (response.data.summary) {
         setSummary(response.data.summary);
       }
     } catch (error) {
-      console.error('Failed to fetch logs:', error);
+      console.error('[ActivityLogs] Failed to fetch logs:', error);
       setLogs([]);
       setTotal(0);
     } finally {
