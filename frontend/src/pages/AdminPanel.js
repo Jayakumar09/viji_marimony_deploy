@@ -141,7 +141,7 @@ const AdminPanel = () => {
     { text: 'User Management', icon: <People />, path: '/admin/users' },
     { text: 'Subscriptions', icon: <AttachMoney />, path: '/admin/subscriptions', paymentBadge: true },
     { text: 'Client Chat', icon: <Chat />, path: '/admin/chat', chatBadge: true },
-    // { text: 'Activity Logs', icon: <History />, path: '/admin/logs' },
+    { text: 'Activity Logs', icon: <History />, path: '/admin/logs' },
     { text: 'Settings', icon: <Settings />, path: '/admin/settings' },
   ];
 
