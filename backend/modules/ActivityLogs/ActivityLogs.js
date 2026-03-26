@@ -3,17 +3,16 @@ const router = express.Router();
 const { prisma } = require("../../utils/database");
 
 /* =========================
-   INITIALIZE TABLE (ensure it exists in PostgreSQL)
+   INITIALIZE TABLES (ensure they exist in PostgreSQL)
    This runs once on server startup
 ========================= */
-const initializeActivityLogTable = async () => {
+const initializeActivityLogTables = async () => {
   try {
-    // Check if table exists by querying it
+    // Check if activity_logs table exists
     await prisma.$queryRaw`SELECT 1 FROM activity_logs LIMIT 1`;
-    console.log("[ActivityLogs] Table exists");
+    console.log("[ActivityLogs] activity_logs table exists");
   } catch (err) {
-    // Table doesn't exist, create it
-    console.log("[ActivityLogs] Creating table...");
+    console.log("[ActivityLogs] Creating activity_logs table...");
     try {
       await prisma.$executeRaw`
         CREATE TABLE IF NOT EXISTS activity_logs (
@@ -33,15 +32,40 @@ const initializeActivityLogTable = async () => {
           created_at TIMESTAMP DEFAULT NOW()
         )
       `;
-      console.log("[ActivityLogs] Table created successfully");
+      console.log("[ActivityLogs] activity_logs table created");
     } catch (createErr) {
-      console.error("[ActivityLogs] Failed to create table:", createErr.message);
+      console.error("[ActivityLogs] Failed to create activity_logs:", createErr.message);
+    }
+  }
+
+  try {
+    // Check if admin_activity_logs table exists
+    await prisma.$queryRaw`SELECT 1 FROM admin_activity_logs LIMIT 1`;
+    console.log("[ActivityLogs] admin_activity_logs table exists");
+  } catch (err) {
+    console.log("[ActivityLogs] Creating admin_activity_logs table...");
+    try {
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS admin_activity_logs (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+          admin_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          target_user_id TEXT,
+          details TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+      console.log("[ActivityLogs] admin_activity_logs table created");
+    } catch (createErr) {
+      console.error("[ActivityLogs] Failed to create admin_activity_logs:", createErr.message);
     }
   }
 };
 
 // Run initialization once on module load
-initializeActivityLogTable();
+initializeActivityLogTables();
 
 /* =========================
    INSERT LOG (standalone function)
@@ -469,3 +493,73 @@ module.exports = {
   router,
   logActivity,
 };
+
+/* =========================
+   ADMIN ACTIVITY LOGS ENDPOINTS
+   Fetch from admin_activity_logs table
+========================= */
+
+// Get admin activity logs
+router.get("/admin", async (req, res) => {
+  try {
+    const {
+      search = "",
+      action,
+      page = 1,
+      limit = 20,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    const offset = (page - 1) * limit;
+    const limitInt = parseInt(limit) || 20;
+    const pageInt = parseInt(page) || 1;
+
+    // Build where conditions
+    const whereConditions = [];
+
+    if (search) {
+      whereConditions.push({
+        OR: [
+          { action: { contains: search, mode: "insensitive" } },
+          { details: { contains: search, mode: "insensitive" } },
+          { targetUserId: { contains: search, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    if (action) {
+      whereConditions.push({ action: action });
+    }
+
+    const where = whereConditions.length > 0 ? { AND: whereConditions } : {};
+
+    // Get logs
+    const logs = await prisma.$queryRaw`
+      SELECT * FROM admin_activity_logs
+      ORDER BY ${sortBy === "createdAt" ? "created_at" : "action"} ${sortOrder.toUpperCase()}
+      LIMIT ${limitInt} OFFSET ${offset}
+    `;
+
+    // Get total count
+    const countResult = await prisma.$queryRaw`
+      SELECT COUNT(*) as total FROM admin_activity_logs
+      ${whereConditions.length > 0 ? 
+        `WHERE action LIKE '%${search}%' OR details LIKE '%${search}%'` : ''}
+    `;
+    const totalCount = parseInt(countResult[0]?.total || 0);
+
+    res.json({
+      success: true,
+      logs: logs,
+      pagination: {
+        total: totalCount,
+        page: pageInt,
+        totalPages: Math.ceil(totalCount / limitInt),
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
