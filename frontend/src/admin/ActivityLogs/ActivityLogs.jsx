@@ -3,7 +3,7 @@ import axios from "axios";
 import "./ActivityLogs.css";
 
 const API_BASE =
-  import.meta.env.REACT_APP_API_URL || "http://localhost:5001";
+  process.env.REACT_APP_API_URL || "http://localhost:5001";
 
 // Date parsing utilities
 const parseDate = (dateStr) => {
