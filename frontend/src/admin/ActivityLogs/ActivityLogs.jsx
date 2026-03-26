@@ -3,7 +3,7 @@ import axios from "axios";
 import "./ActivityLogs.css";
 
 const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:5001";
+  import.meta.env.REACT_APP_API_URL || "http://localhost:5001";
 
 // Date parsing utilities
 const parseDate = (dateStr) => {
@@ -338,7 +338,7 @@ const ActivityLogs = () => {
           }
         });
 
-        const response = await axios.get(`${API_BASE}/api/activity-logs`, {
+        const response = await axios.get(`${API_BASE}/activity-logs`, {
           params,
           headers: adminToken
             ? {
@@ -372,7 +372,7 @@ const ActivityLogs = () => {
       const adminToken = localStorage.getItem("adminToken");
 
       const response = await axios.get(
-        `${API_BASE}/api/activity-logs/stats?days=7`,
+        `${API_BASE}/activity-logs/stats?days=7`,
         {
           headers: adminToken
             ? {
@@ -426,7 +426,7 @@ const ActivityLogs = () => {
     try {
       const adminToken = localStorage.getItem("adminToken");
       await axios.post(
-        `${API_BASE}/api/activity-logs`,
+        `${API_BASE}/activity-logs`,
         {
           actor_type: "ADMIN",
           actor_id: "1",
