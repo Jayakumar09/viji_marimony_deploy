@@ -327,7 +327,7 @@ const ActivityLogs = () => {
 
         const params = new URLSearchParams({
           page,
-          limit: pagination.limit,
+          limit: pagination.limit || 20,
           ...filters,
         });
 
