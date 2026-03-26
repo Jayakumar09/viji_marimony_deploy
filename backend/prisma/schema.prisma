@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -462,4 +462,29 @@ model ChatMessage {
   @@index([isRead])
   @@index([createdAt])
   @@map("chat_messages")
+}
+
+// Activity Logs Model - Track user and admin activities
+model ActivityLog {
+  id          String   @id @default(cuid())
+  actorType   String?  @map("actor_type")   // 'USER' or 'ADMIN'
+  actorId     String?  @map("actor_id")     // ID of the user/admin
+  actorName   String?  @map("actor_name")   // Name of the actor
+  action      String?                       // Action performed
+  status      String?                       // 'Success' or 'Error'
+  details     String?                       // Additional details
+  resourceType String? @map("resource_type") // Resource type (profile, payment, etc.)
+  resourceId  String?  @map("resource_id")   // Resource ID
+  ipAddress   String?  @map("ip_address")   // Client IP address
+  userAgent   String?  @map("user_agent")   // Browser/client info
+  metadata    String?                       // JSON metadata for additional info
+  errorMessage String? @map("error_message") // Error details if any
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorType])
+  @@index([actorId])
+  @@index([action])
+  @@index([status])
+  @@index([createdAt])
+  @@map("activity_logs")
 }
