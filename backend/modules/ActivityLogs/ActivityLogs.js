@@ -3,6 +3,47 @@ const router = express.Router();
 const { prisma } = require("../../utils/database");
 
 /* =========================
+   INITIALIZE TABLE (ensure it exists in PostgreSQL)
+   This runs once on server startup
+========================= */
+const initializeActivityLogTable = async () => {
+  try {
+    // Check if table exists by querying it
+    await prisma.$queryRaw`SELECT 1 FROM activity_logs LIMIT 1`;
+    console.log("[ActivityLogs] Table exists");
+  } catch (err) {
+    // Table doesn't exist, create it
+    console.log("[ActivityLogs] Creating table...");
+    try {
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS activity_logs (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+          actor_type TEXT,
+          actor_id TEXT,
+          actor_name TEXT,
+          action TEXT,
+          status TEXT,
+          details TEXT,
+          resource_type TEXT,
+          resource_id TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          metadata TEXT,
+          error_message TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+      console.log("[ActivityLogs] Table created successfully");
+    } catch (createErr) {
+      console.error("[ActivityLogs] Failed to create table:", createErr.message);
+    }
+  }
+};
+
+// Run initialization once on module load
+initializeActivityLogTable();
+
+/* =========================
    INSERT LOG (standalone function)
 ========================= */
 const logActivity = async ({
