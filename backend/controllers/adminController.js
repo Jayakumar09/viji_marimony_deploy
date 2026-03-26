@@ -207,6 +207,7 @@ const getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 20, search = '', status = 'all' } = req.query;
     const skip = (page - 1) * limit;
+    const adminId = req.admin.id;
     
     // Build where clause
     let where = {};
@@ -319,6 +320,29 @@ const getAllUsers = async (req, res) => {
         pages: Math.ceil(total / limit)
       }
     });
+    
+    // Log the activity
+    if (users.length > 0) {
+      try {
+        await prisma.adminActivityLog.create({
+          data: {
+            adminId,
+            action: 'VIEW_USER_LIST',
+            details: JSON.stringify({
+              page,
+              limit,
+              search: search || 'none',
+              status: status,
+              resultCount: users.length
+            }),
+            ipAddress: req.ip || req.connection?.remoteAddress,
+            userAgent: req.get('User-Agent')
+          }
+        });
+      } catch (logErr) {
+        console.error('Failed to log activity:', logErr.message);
+      }
+    }
   } catch (error) {
     console.error('Get all users error:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -416,6 +440,7 @@ const verifyUser = async (req, res) => {
 const getUserDetails = async (req, res) => {
   try {
     const { id } = req.params;
+    const adminId = req.admin.id;
     
     const user = await prisma.user.findUnique({
       where: { id },
@@ -435,6 +460,21 @@ const getUserDetails = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    
+    // Log the activity
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId,
+        action: 'VIEW_USER_PROFILE',
+        targetUserId: id,
+        details: JSON.stringify({
+          userName: `${user.firstName} ${user.lastName}`,
+          userEmail: user.email
+        }),
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('User-Agent')
+      }
+    });
     
     res.json({ user });
   } catch (error) {
