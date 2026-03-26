@@ -23,7 +23,7 @@ import { useRealTime } from '../contexts/RealTimeContext';
 import { normalizeTier, getTierDisplayName, getTierBadgeColor } from '../utils/subscription';
 import AdminUserProfile from './AdminUserProfile';
 import ProfileShareModal from '../components/ProfileShareModal';
-import ActivityLogs from '../admin/ActivityLogs/ActivityLogs.jsx';
+import ActivityLogsPage from '../admin/ActivityLogs/ActivityLogs.jsx';
 import toast from 'react-hot-toast';
 
 // Sidebar width
@@ -346,7 +346,7 @@ const AdminPanel = () => {
           <Route path="/users/:id" element={<AdminUserProfile />} />
           <Route path="/subscriptions" element={<SubscriptionManagement />} />
           <Route path="/chat" element={<AdminChat />} />
-          <Route path="/logs" element={<ActivityLogs />} />
+          <Route path="/logs" element={<ActivityLogsPage />} />
           <Route path="/settings" element={<AdminSettings />} />
         </Routes>
       </Box>
