@@ -961,33 +961,43 @@ const logAdminActivity = async ({ adminId, action, targetUserId, details, req })
     const detailsString = typeof enrichedDetails === 'string' ? enrichedDetails : JSON.stringify(enrichedDetails || {});
     
     // 1. Log to admin_activity_logs (original table)
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId: safeAdminId,
-        action,
-        targetUserId,
-        details: detailsString,
-        ipAddress,
-        userAgent
-      }
-    });
+    try {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId: safeAdminId,
+          action,
+          targetUserId,
+          details: detailsString,
+          ipAddress,
+          userAgent
+        }
+      });
+      console.log('[ActivityLog] admin_activity_logs created successfully');
+    } catch (logErr) {
+      console.error('[ActivityLog] Failed to create admin_activity_logs:', logErr.message);
+    }
     
     // 2. ALSO log to activity_logs (for frontend Activity Logs UI)
     // Use customId as resourceId if available, otherwise use the internal ID
-    await prisma.activityLog.create({
-      data: {
-        actorType: 'ADMIN',
-        actorId: safeAdminId,
-        actorName: adminName,
-        action: action,
-        status: 'Success',
-        details: detailsString,
-        resourceType: targetUserId ? 'USER' : null,
-        resourceId: userCustomId || targetUserId || null,
-        ipAddress,
-        userAgent
-      }
-    });
+    try {
+      await prisma.activityLog.create({
+        data: {
+          actorType: 'ADMIN',
+          actorId: safeAdminId,
+          actorName: adminName,
+          action: action,
+          status: 'Success',
+          details: detailsString,
+          resourceType: targetUserId ? 'USER' : null,
+          resourceId: userCustomId || targetUserId || null,
+          ipAddress,
+          userAgent
+        }
+      });
+      console.log('[ActivityLog] activity_logs created successfully');
+    } catch (logErr) {
+      console.error('[ActivityLog] Failed to create activity_logs:', logErr.message);
+    }
     
     console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId, userCustomId, ipAddress });
   } catch (error) {

@@ -94,6 +94,20 @@ const FilterBar = ({ filters, setFilters, onSearch, onReset }) => (
         <option value="SYSTEM">System</option>
       </select>
       <select
+        value={filters.actionFilter || "ALL"}
+        onChange={(e) => setFilters({ ...filters, actionFilter: e.target.value })}
+      >
+        <option value="ALL">All Actions</option>
+        <option value="VIEW_USER_PROFILE">View User Profile</option>
+        <option value="DELETE_USER">Delete User</option>
+        <option value="BLOCK_USER">Block User</option>
+        <option value="UNBLOCK_USER">Unblock User</option>
+        <option value="UPDATE_SUBSCRIPTION">Update Subscription</option>
+        <option value="VERIFY_USER">Verify User</option>
+        <option value="PROFILE_VERIFICATION_APPROVED">Profile Verification Approved</option>
+        <option value="PHOTO_VERIFIED">Photo Verified</option>
+      </select>
+      <select
         value={filters.statusFilter}
         onChange={(e) => setFilters({ ...filters, statusFilter: e.target.value })}
       >
@@ -312,6 +326,7 @@ const ActivityLogs = () => {
   const [filters, setFilters] = useState({
     search: "",
     actorType: "ALL",
+    actionFilter: "ALL",
     statusFilter: "ALL",
     timeFilter: "ALL",
     startDate: "",
@@ -334,7 +349,12 @@ const ActivityLogs = () => {
         // Remove empty params
         Object.keys(filters).forEach((key) => {
           if (filters[key] && filters[key] !== "ALL") {
-            params.set(key, filters[key]);
+            // Use actionFilter for action, but send as 'action' to backend
+            if (key === 'actionFilter') {
+              params.set('action', filters[key]);
+            } else {
+              params.set(key, filters[key]);
+            }
           }
         });
 
@@ -405,6 +425,7 @@ const ActivityLogs = () => {
     setFilters({
       search: "",
       actorType: "ALL",
+      actionFilter: "ALL",
       statusFilter: "ALL",
       timeFilter: "ALL",
       startDate: "",

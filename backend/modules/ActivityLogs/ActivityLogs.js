@@ -199,8 +199,10 @@ router.get("/", async (req, res) => {
       whereConditions.push({ status: statusFilter });
     }
 
-    if (action) {
-      whereConditions.push({ action: action });
+    // Handle action filter from frontend (actionFilter parameter)
+    const actionFilter = req.query.actionFilter || req.query.action;
+    if (actionFilter && actionFilter !== "ALL") {
+      whereConditions.push({ action: actionFilter });
     }
 
     // Time filter
