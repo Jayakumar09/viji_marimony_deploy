@@ -40,7 +40,31 @@ const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, det
       // Ignore - use default
     }
     
-    const detailsString = typeof details === 'string' ? details : JSON.stringify(details || {});
+    // If targetUserId is provided, fetch the user's customId for better logging
+    let userCustomId = null;
+    let enrichedDetails = details;
+    if (targetUserId) {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: targetUserId },
+          select: { customId: true, firstName: true, lastName: true }
+        });
+        if (user) {
+          userCustomId = user.customId;
+          // Enrich details with customId if details is an object
+          if (details && typeof details === 'object') {
+            enrichedDetails = {
+              ...details,
+              userCustomId: userCustomId
+            };
+          }
+        }
+      } catch (err) {
+        // Ignore - continue without customId
+      }
+    }
+    
+    const detailsString = typeof enrichedDetails === 'string' ? enrichedDetails : JSON.stringify(enrichedDetails || {});
     const ipAddress = req ? (req.ip || req.connection?.remoteAddress) : null;
     const userAgent = req ? req.get('User-Agent') : null;
     
@@ -57,6 +81,7 @@ const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, det
     });
     
     // 2. ALSO log to activity_logs (for frontend Activity Logs UI)
+    // Use customId as resourceId if available, otherwise use the internal ID
     await prisma.activityLog.create({
       data: {
         actorType: 'ADMIN',
@@ -66,7 +91,7 @@ const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, det
         status: 'Success',
         details: detailsString,
         resourceType: targetUserId ? 'USER' : null,
-        resourceId: targetUserId || null,
+        resourceId: userCustomId || targetUserId || null,
         ipAddress,
         userAgent
       }
