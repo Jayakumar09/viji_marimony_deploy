@@ -21,6 +21,7 @@ import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useRealTime } from '../contexts/RealTimeContext';
 import { normalizeTier, getTierDisplayName, getTierBadgeColor } from '../utils/subscription';
+import { getImageUrl } from '../utils/imageUrl';
 import AdminUserProfile from './AdminUserProfile';
 import ProfileShareModal from '../components/ProfileShareModal';
 import ActivityLogsPage from '../admin/ActivityLogs/ActivityLogs.jsx';
@@ -2143,7 +2144,7 @@ const SubscriptionManagement = () => {
                   {selectedPayment.paymentProof ? (
                     <Box
                       component="img"
-                      src={selectedPayment.paymentProof.startsWith('http') ? selectedPayment.paymentProof : `${selectedPayment.paymentProof.startsWith('/uploads') ? '' : process.env.REACT_APP_API_URL || 'https://vijayalakshmiboyarmatrimony.com/api'}${selectedPayment.paymentProof}`}
+                      src={getImageUrl(selectedPayment.paymentProof)}
                       alt="Payment Proof"
                       sx={{
                         width: '100%',
