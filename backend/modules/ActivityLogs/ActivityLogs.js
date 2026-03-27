@@ -274,7 +274,7 @@ router.get("/", async (req, res) => {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Get stats using multiple queries (SQLite compatible)
-    const [totalToday, adminToday, userToday, errorsToday] = await Promise.all([
+    const [totalToday, adminToday, userToday, systemToday, errorsToday] = await Promise.all([
       prisma.activityLog.count({
         where: { createdAt: { gte: todayStart } },
       }),
@@ -283,6 +283,9 @@ router.get("/", async (req, res) => {
       }),
       prisma.activityLog.count({
         where: { actorType: "USER", createdAt: { gte: todayStart } },
+      }),
+      prisma.activityLog.count({
+        where: { actorType: "SYSTEM", createdAt: { gte: todayStart } },
       }),
       prisma.activityLog.count({
         where: { status: "Error", createdAt: { gte: todayStart } },
@@ -296,6 +299,7 @@ router.get("/", async (req, res) => {
         total_today: totalToday,
         admin_logs_today: adminToday,
         user_logs_today: userToday,
+        system_logs_today: systemToday,
         errors_today: errorsToday,
       },
       pagination: {
@@ -491,9 +495,48 @@ router.delete("/", async (req, res) => {
 /* =========================
    EXPORT FUNCTIONS
 ========================= */
+/* =========================
+   LOG SYSTEM ACTIVITY (for automated/server actions)
+   Use this for cron jobs, auto-verification, scheduled tasks
+   ========================= */
+const logSystemActivity = async ({
+  action,
+  resource_type = null,
+  resource_id = null,
+  description = null,
+  status = "Success",
+  details,
+  metadata = null,
+  error_message = null,
+}) => {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        actorType: "SYSTEM",
+        actorId: "system",
+        actorName: "System",
+        action: action || "SYSTEM_TASK",
+        status: status || "Success",
+        details: details || description || "",
+        resourceType: resource_type,
+        resourceId: resource_id,
+        ipAddress: null,
+        userAgent: "System/Automated",
+        metadata: metadata ? JSON.stringify(metadata) : null,
+        errorMessage: error_message,
+      },
+    });
+    return { success: true };
+  } catch (err) {
+    console.error("System Log error:", err.message);
+    return { success: false, error: err.message };
+  }
+};
+
 module.exports = {
   router,
   logActivity,
+  logSystemActivity,
 };
 
 /* =========================
