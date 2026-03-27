@@ -12,7 +12,7 @@
 
 const manualPaymentService = require('../services/manualPaymentService');
 const paymentConfig = require('../config/payments');
-const upload = require('../utils/upload');
+const { upload } = require('../utils/upload');
 const path = require('path');
 const fs = require('fs');
 
@@ -492,7 +492,7 @@ const getUserPaymentNotifications = async (req, res) => {
 };
 
 // Export multer upload middleware for 'proof' field
-const getUploadMiddleware = () => upload.single('proof');
+const getUploadMiddleware = () => multer.single('proof');
 
 module.exports = {
   getPlans,
