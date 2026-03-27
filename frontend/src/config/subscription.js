@@ -55,7 +55,7 @@ export const getDefaultPlans = () => {
       price: 0,
       duration: 0,
       successFee: 0,
-      features: ['Basic profile creation', 'Limited searches', '5 interests per day']
+      features: ['Basic profile creation', 'Profile search & matching (Based on availability)', 'Express interest in profiles (When suitable matches found)']
     },
     {
       id: 'BASIC',
@@ -63,7 +63,7 @@ export const getDefaultPlans = () => {
       price: 1000,
       duration: 30,
       successFee: 25000,
-      features: ['Basic profile visibility', '10 interests per day', 'View contact details']
+      features: ['Basic profile creation', 'Profile search & matching (Enhanced visibility)', 'Express interest in profiles', 'View contact details']
     },
     {
       id: 'PRO',
@@ -71,7 +71,7 @@ export const getDefaultPlans = () => {
       price: 2000,
       duration: 90,
       successFee: 50000,
-      features: ['All Basic features', 'Unlimited interests', 'Priority listing', 'AI verification included']
+      features: ['All Basic features', 'Profile search & matching (Higher visibility)', 'Express interest in profiles', 'View contact details', 'Priority listing', 'AI verification badge']
     },
     {
       id: 'PREMIUM',
@@ -79,7 +79,7 @@ export const getDefaultPlans = () => {
       price: 5000,
       duration: 180,
       successFee: 100000,
-      features: ['All Pro features', 'Profile highlighting', 'Dedicated support', 'Advanced AI verification']
+      features: ['All Pro features', 'Profile search & matching (Highest visibility)', 'Express interest in profiles', 'View contact details', 'Priority listing', 'AI verification badge', 'Profile highlighting', 'Dedicated support']
     }
   ];
 };
