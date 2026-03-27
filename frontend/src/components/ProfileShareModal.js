@@ -60,6 +60,26 @@ import api from '../services/api';
 import profileService from '../services/profileService';
 import toast from 'react-hot-toast';
 
+// Activity logging helper function
+const logActivity = async (action, details) => {
+  try {
+    const adminToken = localStorage.getItem('adminToken');
+    await api.post('/activity-logs', {
+      actor_type: 'ADMIN',
+      actor_id: 'admin',
+      action: action,
+      status: 'Success',
+      details: JSON.stringify(details),
+      resource_type: 'USER',
+      resource_id: details.userId || details.userCustomId || null,
+    }, {
+      headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {}
+    });
+  } catch (error) {
+    console.error('Activity log error:', error);
+  }
+};
+
 const ProfileShareModal = ({ open, onClose, userId, userName }) => {
   const [shareOption, setShareOption] = useState('myself');
   const [email, setEmail] = useState('');
@@ -196,6 +216,15 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       window.URL.revokeObjectURL(url);
       
       toast.success('PDF downloaded successfully!');
+      
+      // Log activity
+      await logActivity('DOWNLOAD_PROFILE_PDF', {
+        userId: userId,
+        userCustomId: profileData?.customId,
+        userName: profileData?.firstName,
+        shareType: shareOption,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
       console.error('PDF download error:', error);
       // Fallback to frontend PDF generation
@@ -256,6 +285,16 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
     // Open WhatsApp with the share message
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
     window.open(whatsappUrl, '_blank');
+    
+    // Log activity
+    await logActivity('SHARE_PROFILE_WHATSAPP', {
+      userId: userId,
+      userCustomId: profileData?.customId,
+      userName: profileData?.firstName,
+      shareType: shareOption,
+      recipientType: 'whatsapp',
+      timestamp: new Date().toISOString()
+    });
     
     toast.success('WhatsApp opened! To share PDF: Download first, then attach in WhatsApp chat.');
   };
@@ -327,8 +366,29 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         }
         
         toast('Email client opened. Please attach the downloaded PDF.', { icon: '📧' });
+        
+        // Log activity (fallback - email client opened)
+        await logActivity('SHARE_PROFILE_EMAIL', {
+          userId: userId,
+          userCustomId: profileData?.customId,
+          userName: profileData?.firstName,
+          shareType: shareOption,
+          recipientEmail: email,
+          method: 'mailto_fallback',
+          timestamp: new Date().toISOString()
+        });
       } else {
         toast.success(`Profile sent to ${email}`);
+        
+        // Log activity
+        await logActivity('SHARE_PROFILE_EMAIL', {
+          userId: userId,
+          userCustomId: profileData?.customId,
+          userName: profileData?.firstName,
+          shareType: shareOption,
+          recipientEmail: email,
+          timestamp: new Date().toISOString()
+        });
       }
       setEmail('');
     } catch (error) {
@@ -338,6 +398,17 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       const body = encodeURIComponent(`Please find attached the profile of ${userName}.\n\nRegards,\nVijayalakshmi Boyar Matrimony`);
       window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       toast('PDF downloaded. Please attach it to your email.', { icon: '📧' });
+      
+      // Log activity (fallback - error case)
+      await logActivity('SHARE_PROFILE_EMAIL', {
+        userId: userId,
+        userCustomId: profileData?.customId,
+        userName: profileData?.firstName,
+        shareType: shareOption,
+        recipientEmail: email,
+        method: 'mailto_error_fallback',
+        timestamp: new Date().toISOString()
+      });
       
       // Download PDF as fallback
       try {
