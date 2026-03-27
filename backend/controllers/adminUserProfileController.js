@@ -374,7 +374,8 @@ const getAdminUserProfile = async (req, res) => {
         userName: `${user.firstName} ${user.lastName}`,
         userEmail: user.email,
         viewedAt: new Date() 
-      }
+      },
+      req
     });
 
     res.json({
@@ -429,7 +430,8 @@ const blockUser = async (req, res) => {
         reason: reason || 'No reason provided',
         blockedAt: new Date(),
         userEmail: user.email
-      }
+      },
+      req
     });
 
     res.json({
@@ -486,7 +488,8 @@ const unblockUser = async (req, res) => {
       details: {
         unblockedAt: new Date(),
         userEmail: user.email
-      }
+      },
+      req
     });
 
     res.json({
@@ -535,7 +538,8 @@ const deleteUser = async (req, res) => {
           reason: reason || 'No reason provided',
           userEmail: user.email,
           userName: `${user.firstName} ${user.lastName}`
-        }
+        },
+        req
       });
 
       await prisma.user.delete({
@@ -566,7 +570,8 @@ const deleteUser = async (req, res) => {
           userEmail: user.email,
           userName: `${user.firstName} ${user.lastName}`,
           isPermanent: false
-        }
+        },
+        req
       });
 
       res.json({
@@ -656,7 +661,8 @@ const manualVerifyUser = async (req, res) => {
         status: status,
         notes: notes,
         verifiedAt: new Date()
-      }
+      },
+      req
     });
 
     res.json({
@@ -732,7 +738,8 @@ const updateSubscription = async (req, res) => {
         plan: plan,
         amount: amount,
         updatedAt: new Date()
-      }
+      },
+      req
     });
 
     res.json({
@@ -822,7 +829,8 @@ const verifyUserPhoto = async (req, res) => {
         photoType: photoType || 'PROFILE',
         reason: action === 'reject' ? reason : null,
         reviewedAt: new Date()
-      }
+      },
+      req
     });
 
     res.json({
@@ -903,10 +911,14 @@ const checkAllPhotosVerified = async (userId) => {
  * Log admin activity - writes to BOTH admin_activity_logs AND activity_logs
  * This ensures activities appear in the frontend Activity Logs UI
  */
-const logAdminActivity = async ({ adminId, action, targetUserId, details }) => {
+const logAdminActivity = async ({ adminId, action, targetUserId, details, req }) => {
   try {
     // Ensure adminId exists - use fallback if not
     const safeAdminId = adminId || 'system-admin';
+    
+    // Get IP Address and User Agent from request if provided
+    const ipAddress = req ? (req.ip || req.connection?.remoteAddress || req.get('X-Forwarded-For')) : null;
+    const userAgent = req ? req.get('User-Agent') : null;
     
     // First, try to get admin name for better logging
     let adminName = 'Admin';
@@ -954,7 +966,9 @@ const logAdminActivity = async ({ adminId, action, targetUserId, details }) => {
         adminId: safeAdminId,
         action,
         targetUserId,
-        details: detailsString
+        details: detailsString,
+        ipAddress,
+        userAgent
       }
     });
     
@@ -970,12 +984,12 @@ const logAdminActivity = async ({ adminId, action, targetUserId, details }) => {
         details: detailsString,
         resourceType: targetUserId ? 'USER' : null,
         resourceId: userCustomId || targetUserId || null,
-        ipAddress: null,
-        userAgent: null
+        ipAddress,
+        userAgent
       }
     });
     
-    console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId, userCustomId });
+    console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId, userCustomId, ipAddress });
   } catch (error) {
     console.error('[ActivityLog] Error:', error.message);
   }
