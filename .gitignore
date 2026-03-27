@@ -1,3 +1,7 @@
+# Backup folders (large, local only)
+Backup_Success_Codes/
+production-backups/
+
 # Dependencies
 node_modules/
 npm-debug.log*
