@@ -12,37 +12,9 @@
 
 const manualPaymentService = require('../services/manualPaymentService');
 const paymentConfig = require('../config/payments');
-const multer = require('multer');
+const upload = require('../utils/upload');
 const path = require('path');
 const fs = require('fs');
-
-// Configure multer for payment proof uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/payment_proofs');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `proof-${req.user.id}-${uniqueSuffix}${ext}`);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: paymentConfig.validation.maxProofFileSize },
-  fileFilter: (req, file, cb) => {
-    if (paymentConfig.validation.allowedProofTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, and PDF are allowed.'));
-    }
-  }
-});
 
 /**
  * GET /api/payments/plans
@@ -158,8 +130,23 @@ const submitPaymentProof = async (req, res) => {
       return res.status(400).json({ error: 'Payment proof file is required' });
     }
 
-    // Generate URL for the uploaded file
-    const proofUrl = `/uploads/payment_proofs/${req.file.filename}`;
+    // Get the URL - could be Cloudinary URL or local path
+    // req.file.path contains the path, if it starts with 'http' it's a Cloudinary URL
+    let proofUrl = req.file.path || req.file.filename;
+    
+    // If it's not a full URL, make it a proper path
+    if (!proofUrl.startsWith('http')) {
+      // Check if it's a cloudinary path (contains cloudinary.com)
+      if (proofUrl.includes('cloudinary')) {
+        // Already a cloudinary URL, keep as is
+      } else if (proofUrl.startsWith('/uploads/')) {
+        proofUrl = proofUrl; // Keep as /uploads/...
+      } else {
+        proofUrl = `/uploads/${path.basename(proofUrl)}`;
+      }
+    }
+
+    console.log('[PaymentProof] Uploaded file info:', { path: req.file.path, filename: req.file.filename, url: proofUrl });
 
     const result = await manualPaymentService.submitPaymentProof({
       paymentId,
