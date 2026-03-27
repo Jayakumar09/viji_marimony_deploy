@@ -98,6 +98,9 @@ const FilterBar = ({ filters, setFilters, onSearch, onReset }) => (
         onChange={(e) => setFilters({ ...filters, actionFilter: e.target.value })}
       >
         <option value="ALL">All Actions</option>
+        <option value="USER_REGISTERED">User Registered</option>
+        <option value="USER_LOGIN">User Login</option>
+        <option value="ADMIN_LOGIN">Admin Login</option>
         <option value="VIEW_USER_PROFILE">View User Profile</option>
         <option value="DELETE_USER">Delete User</option>
         <option value="BLOCK_USER">Block User</option>

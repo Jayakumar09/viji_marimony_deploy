@@ -3,6 +3,29 @@ const { generateToken } = require('../utils/jwt');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { generateUserId, initCounter } = require('../utils/userIdGenerator');
 
+// Activity logging helper
+const logActivity = async ({ actor_type, actor_id, actor_name, action, status = 'Success', details, req }) => {
+  try {
+    const ipAddress = req ? (req.ip || req.connection?.remoteAddress || req.get('X-Forwarded-For')) : null;
+    const userAgent = req ? req.get('User-Agent') : null;
+    
+    await prisma.activityLog.create({
+      data: {
+        actorType: actor_type || 'USER',
+        actorId: actor_id || 'unknown',
+        actorName: actor_name,
+        action: action || 'unknown',
+        status: status,
+        details: typeof details === 'string' ? details : JSON.stringify(details || {}),
+        ipAddress,
+        userAgent
+      }
+    });
+  } catch (err) {
+    console.error('Activity log error:', err.message);
+  }
+};
+
 // Initialize counter on first registration call
 initCounter().catch(console.error);
 
@@ -91,6 +114,21 @@ const register = async (req, res) => {
     // Generate token
     const token = generateToken(user.id);
 
+    // Log the registration activity
+    await logActivity({
+      actor_type: 'USER',
+      actor_id: user.id,
+      actor_name: `${user.firstName} ${user.lastName}`,
+      action: 'USER_REGISTERED',
+      status: 'Success',
+      details: {
+        email: user.email,
+        gender: user.gender,
+        registeredAt: new Date()
+      },
+      req
+    });
+
     res.status(201).json({
       message: 'User registered successfully',
       token,
@@ -175,6 +213,20 @@ const login = async (req, res) => {
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() }
+    });
+
+    // Log the login activity
+    await logActivity({
+      actor_type: 'USER',
+      actor_id: user.id,
+      actor_name: `${user.firstName} ${user.lastName}`,
+      action: 'USER_LOGIN',
+      status: 'Success',
+      details: {
+        email: user.email,
+        loginAt: new Date()
+      },
+      req
     });
 
     // Generate token
@@ -487,7 +539,21 @@ const adminLogin = async (req, res) => {
       where: { id: admin.id },
       data: { lastLogin: new Date() }
     });
-    
+
+    // Log the admin login activity
+    await logActivity({
+      actor_type: 'ADMIN',
+      actor_id: admin.id,
+      actor_name: admin.name || admin.email,
+      action: 'ADMIN_LOGIN',
+      status: 'Success',
+      details: {
+        email: admin.email,
+        loginAt: new Date()
+      },
+      req
+    });
+
     // Generate token
     const token = generateToken(admin.id);
     
