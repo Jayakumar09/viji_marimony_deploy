@@ -2143,7 +2143,7 @@ const SubscriptionManagement = () => {
                   {selectedPayment.paymentProof ? (
                     <Box
                       component="img"
-                      src={selectedPayment.paymentProof.startsWith('http') ? selectedPayment.paymentProof : `${process.env.REACT_APP_API_URL || 'https://vijayalakshmiboyarmatrimony.com/api'}${selectedPayment.paymentProof}`}
+                      src={selectedPayment.paymentProof.startsWith('http') ? selectedPayment.paymentProof : `${selectedPayment.paymentProof.startsWith('/uploads') ? '' : process.env.REACT_APP_API_URL || 'https://vijayalakshmiboyarmatrimony.com/api'}${selectedPayment.paymentProof}`}
                       alt="Payment Proof"
                       sx={{
                         width: '100%',
