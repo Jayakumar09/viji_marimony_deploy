@@ -312,7 +312,7 @@ const getPaymentDetails = async (paymentId, userId) => {
       method: payment.paymentMethod,
       status: payment.paymentStatus,
       transactionId: payment.transactionId,
-      paymentProof: payment.paymentProof,
+      paymentProof: payment.paymentProof ? (payment.paymentProof.startsWith('http') ? payment.paymentProof : `${process.env.SERVER_URL || 'https://viji-marimony-new.onrender.com'}${payment.paymentProof}`) : null,
       paymentDate: payment.paymentDate,
       rejectionReason: payment.rejectionReason,
       createdAt: payment.createdAt,
@@ -402,7 +402,7 @@ const getAdminPayments = async (page = 1, limit = 20, status = null) => {
       method: p.paymentMethod,
       status: p.paymentStatus,
       transactionId: p.transactionId,
-      paymentProof: p.paymentProof,
+      paymentProof: p.paymentProof ? (p.paymentProof.startsWith('http') ? p.paymentProof : `${process.env.SERVER_URL || 'https://viji-marimony-new.onrender.com'}${p.paymentProof}`) : null,
       paymentDate: p.paymentDate,
       createdAt: p.createdAt,
       user: p.user
