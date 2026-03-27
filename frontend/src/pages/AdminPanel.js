@@ -2143,7 +2143,7 @@ const SubscriptionManagement = () => {
                   {selectedPayment.paymentProof ? (
                     <Box
                       component="img"
-                      src={selectedPayment.paymentProof}
+                      src={selectedPayment.paymentProof.startsWith('http') ? selectedPayment.paymentProof : `${process.env.REACT_APP_API_URL || 'https://vijayalakshmiboyarmatrimony.com/api'}${selectedPayment.paymentProof}`}
                       alt="Payment Proof"
                       sx={{
                         width: '100%',
@@ -2151,6 +2151,9 @@ const SubscriptionManagement = () => {
                         border: '1px solid #e0e0e0',
                         maxHeight: 400,
                         objectFit: 'contain'
+                      }}
+                      onError={(e) => {
+                        e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
                       }}
                     />
                   ) : (
