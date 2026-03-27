@@ -7,8 +7,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent, Grid, Button, CircularProgress } from '@mui/material';
 import { useParams } from 'react-router-dom';
-import api from '../../services/api';
-import { getImageUrl } from '../../utils/imageUrl';
+import api from '../services/api';
+import { getImageUrl } from '../utils/imageUrl';
 
 const PaymentVerificationTest = () => {
   const { paymentId } = useParams();
