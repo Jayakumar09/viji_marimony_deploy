@@ -900,13 +900,29 @@ const checkAllPhotosVerified = async (userId) => {
 };
 
 /**
- * Log admin activity
+ * Log admin activity - writes to BOTH admin_activity_logs AND activity_logs
+ * This ensures activities appear in the frontend Activity Logs UI
  */
 const logAdminActivity = async ({ adminId, action, targetUserId, details }) => {
   try {
     // Ensure adminId exists - use fallback if not
     const safeAdminId = adminId || 'system-admin';
     
+    // First, try to get admin name for better logging
+    let adminName = 'Admin';
+    try {
+      const admin = await prisma.admin.findUnique({
+        where: { id: safeAdminId },
+        select: { name: true, email: true }
+      });
+      if (admin) {
+        adminName = admin.name || admin.email || 'Admin';
+      }
+    } catch (err) {
+      console.log('[ActivityLog] Could not fetch admin name:', err.message);
+    }
+    
+    // 1. Log to admin_activity_logs (original table)
     await prisma.adminActivityLog.create({
       data: {
         adminId: safeAdminId,
@@ -915,7 +931,25 @@ const logAdminActivity = async ({ adminId, action, targetUserId, details }) => {
         details: JSON.stringify(details || {})
       }
     });
-    console.log('[ActivityLog] Created:', { adminId: safeAdminId, action, targetUserId });
+    
+    // 2. ALSO log to activity_logs (for frontend Activity Logs UI)
+    const detailsString = typeof details === 'string' ? details : JSON.stringify(details || {});
+    await prisma.activityLog.create({
+      data: {
+        actorType: 'ADMIN',
+        actorId: safeAdminId,
+        actorName: adminName,
+        action: action,
+        status: 'Success',
+        details: detailsString,
+        resourceType: targetUserId ? 'USER' : null,
+        resourceId: targetUserId || null,
+        ipAddress: null,
+        userAgent: null
+      }
+    });
+    
+    console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId, adminName });
   } catch (error) {
     console.error('[ActivityLog] Error:', error.message);
   }

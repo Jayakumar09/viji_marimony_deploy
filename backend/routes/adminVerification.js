@@ -18,6 +18,66 @@ const { adminAuthMiddleware } = require('../middleware/auth');
 // Import AI verification module
 const aiVerification = require('../ai-verification');
 
+/**
+ * Helper function to log admin activity to BOTH tables
+ * This ensures activities appear in the frontend Activity Logs UI
+ */
+const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, details, req }) => {
+  try {
+    const safeAdminId = adminId || 'system-admin';
+    
+    // Get admin name for better logging
+    let adminName = 'Admin';
+    try {
+      const admin = await prisma.admin.findUnique({
+        where: { id: safeAdminId },
+        select: { name: true, email: true }
+      });
+      if (admin) {
+        adminName = admin.name || admin.email || 'Admin';
+      }
+    } catch (err) {
+      // Ignore - use default
+    }
+    
+    const detailsString = typeof details === 'string' ? details : JSON.stringify(details || {});
+    const ipAddress = req ? (req.ip || req.connection?.remoteAddress) : null;
+    const userAgent = req ? req.get('User-Agent') : null;
+    
+    // 1. Log to admin_activity_logs (original table)
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId: safeAdminId,
+        action,
+        targetUserId,
+        details: detailsString,
+        ipAddress,
+        userAgent
+      }
+    });
+    
+    // 2. ALSO log to activity_logs (for frontend Activity Logs UI)
+    await prisma.activityLog.create({
+      data: {
+        actorType: 'ADMIN',
+        actorId: safeAdminId,
+        actorName: adminName,
+        action: action,
+        status: 'Success',
+        details: detailsString,
+        resourceType: targetUserId ? 'USER' : null,
+        resourceId: targetUserId || null,
+        ipAddress,
+        userAgent
+      }
+    });
+    
+    console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId });
+  } catch (error) {
+    console.error('[ActivityLog] Error:', error.message);
+  }
+};
+
 // Apply authentication and admin middleware to all routes
 router.use(adminAuthMiddleware);
 
@@ -168,24 +228,18 @@ router.post('/verifications/:id/approve', async (req, res) => {
       data: { isVerified: true }
     });
 
-    // Log admin activity
-    try {
-      await prisma.adminActivityLog.create({
-        data: {
-          adminId,
-          action: 'PROFILE_VERIFICATION_APPROVED',
-          targetUserId: verification.userId,
-          details: JSON.stringify({
-            userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
-            previousStatus: verification.status,
-            newStatus: 'APPROVED'
-          })
-        }
-      });
-      console.log('[verifications/approve] Activity log created for:', user ? user.firstName : 'Unknown');
-    } catch (logError) {
-      console.error('[verifications/approve] Failed to create activity log:', logError.message);
-    }
+    // Log admin activity to both tables
+    await logAdminActivityToBothTables({
+      adminId,
+      action: 'PROFILE_VERIFICATION_APPROVED',
+      targetUserId: verification.userId,
+      details: {
+        userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+        previousStatus: verification.status,
+        newStatus: 'APPROVED'
+      },
+      req
+    });
 
     res.json({
       message: 'Verification approved successfully',

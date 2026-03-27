@@ -1,6 +1,66 @@
 const { prisma } = require('../utils/database');
 const sseService = require('../services/sseService');
 
+/**
+ * Helper function to log admin activity to BOTH tables
+ * This ensures activities appear in the frontend Activity Logs UI
+ */
+const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, details, req }) => {
+  try {
+    const safeAdminId = adminId || 'system-admin';
+    
+    // Get admin name for better logging
+    let adminName = 'Admin';
+    try {
+      const admin = await prisma.admin.findUnique({
+        where: { id: safeAdminId },
+        select: { name: true, email: true }
+      });
+      if (admin) {
+        adminName = admin.name || admin.email || 'Admin';
+      }
+    } catch (err) {
+      // Ignore - use default
+    }
+    
+    const detailsString = typeof details === 'string' ? details : JSON.stringify(details || {});
+    const ipAddress = req ? (req.ip || req.connection?.remoteAddress) : null;
+    const userAgent = req ? req.get('User-Agent') : null;
+    
+    // 1. Log to admin_activity_logs (original table)
+    await prisma.adminActivityLog.create({
+      data: {
+        adminId: safeAdminId,
+        action,
+        targetUserId,
+        details: detailsString,
+        ipAddress,
+        userAgent
+      }
+    });
+    
+    // 2. ALSO log to activity_logs (for frontend Activity Logs UI)
+    await prisma.activityLog.create({
+      data: {
+        actorType: 'ADMIN',
+        actorId: safeAdminId,
+        actorName: adminName,
+        action: action,
+        status: 'Success',
+        details: detailsString,
+        resourceType: targetUserId ? 'USER' : null,
+        resourceId: targetUserId || null,
+        ipAddress,
+        userAgent
+      }
+    });
+    
+    console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId });
+  } catch (error) {
+    console.error('[ActivityLog] Error:', error.message);
+  }
+};
+
 // Admin middleware
 const adminMiddleware = async (req, res, next) => {
   try {
@@ -120,20 +180,17 @@ const approvePhoto = async (req, res) => {
     // Check if all photos for this user are approved
     await checkPhotoVerificationStatus(photo.userId);
     
-    // Log the activity
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId,
-        action: 'PHOTO_APPROVED',
-        targetUserId: photo.userId,
-        details: JSON.stringify({
-          photoId: id,
-          photoType: photo.photoType,
-          previousStatus: photo.status
-        }),
-        ipAddress: req.ip || req.connection?.remoteAddress,
-        userAgent: req.get('User-Agent')
-      }
+    // Log the activity to both tables
+    await logAdminActivityToBothTables({
+      adminId,
+      action: 'PHOTO_APPROVED',
+      targetUserId: photo.userId,
+      details: {
+        photoId: id,
+        photoType: photo.photoType,
+        previousStatus: photo.status
+      },
+      req
     });
     
     res.json({ message: 'Photo approved successfully' });
@@ -177,20 +234,17 @@ const rejectPhoto = async (req, res) => {
       }
     });
     
-    // Log the activity
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId,
-        action: 'PHOTO_REJECTED',
-        targetUserId: photo.userId,
-        details: JSON.stringify({
-          photoId: id,
-          photoType: photo.photoType,
-          rejectionReason: reason
-        }),
-        ipAddress: req.ip || req.connection?.remoteAddress,
-        userAgent: req.get('User-Agent')
-      }
+    // Log the activity to both tables
+    await logAdminActivityToBothTables({
+      adminId,
+      action: 'PHOTO_REJECTED',
+      targetUserId: photo.userId,
+      details: {
+        photoId: id,
+        photoType: photo.photoType,
+        rejectionReason: reason
+      },
+      req
     });
     
     res.json({ message: 'Photo rejected' });
@@ -323,25 +377,19 @@ const getAllUsers = async (req, res) => {
     
     // Log the activity
     if (users.length > 0) {
-      try {
-        await prisma.adminActivityLog.create({
-          data: {
-            adminId,
-            action: 'VIEW_USER_LIST',
-            details: JSON.stringify({
-              page,
-              limit,
-              search: search || 'none',
-              status: status,
-              resultCount: users.length
-            }),
-            ipAddress: req.ip || req.connection?.remoteAddress,
-            userAgent: req.get('User-Agent')
-          }
-        });
-      } catch (logErr) {
-        console.error('Failed to log activity:', logErr.message);
-      }
+      // Log the activity to both tables
+      await logAdminActivityToBothTables({
+        adminId,
+        action: 'VIEW_USER_LIST',
+        details: {
+          page,
+          limit,
+          search: search || 'none',
+          status: status,
+          resultCount: users.length
+        },
+        req
+      });
     }
   } catch (error) {
     console.error('Get all users error:', error);
@@ -396,24 +444,18 @@ const verifyUser = async (req, res) => {
       }
     });
     
-    // Log admin activity
-    try {
-      await prisma.adminActivityLog.create({
-        data: {
-          adminId,
-          action: 'PROFILE_VERIFICATION_APPROVED',
-          targetUserId: id,
-          details: JSON.stringify({
-            userName: `${user.firstName} ${user.lastName}`,
-            previousStatus: user.isVerified ? 'Verified' : 'Not Verified',
-            newStatus: 'Verified'
-          })
-        }
-      });
-      console.log('[verifyUser] Activity log created for user:', user.firstName, user.lastName);
-    } catch (logError) {
-      console.error('[verifyUser] Failed to create activity log:', logError.message);
-    }
+    // Log admin activity to both tables
+    await logAdminActivityToBothTables({
+      adminId,
+      action: 'PROFILE_VERIFICATION_APPROVED',
+      targetUserId: id,
+      details: {
+        userName: `${user.firstName} ${user.lastName}`,
+        previousStatus: user.isVerified ? 'Verified' : 'Not Verified',
+        newStatus: 'Verified'
+      },
+      req
+    });
     
     res.json({ 
       success: true, 
@@ -461,19 +503,16 @@ const getUserDetails = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Log the activity
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId,
-        action: 'VIEW_USER_PROFILE',
-        targetUserId: id,
-        details: JSON.stringify({
-          userName: `${user.firstName} ${user.lastName}`,
-          userEmail: user.email
-        }),
-        ipAddress: req.ip || req.connection?.remoteAddress,
-        userAgent: req.get('User-Agent')
-      }
+    // Log the activity to both tables
+    await logAdminActivityToBothTables({
+      adminId,
+      action: 'VIEW_USER_PROFILE',
+      targetUserId: id,
+      details: {
+        userName: `${user.firstName} ${user.lastName}`,
+        userEmail: user.email
+      },
+      req
     });
     
     res.json({ user });
@@ -781,24 +820,18 @@ const approveProfileVerification = async (req, res) => {
       }
     });
     
-    // Log admin activity
-    try {
-      await prisma.adminActivityLog.create({
-        data: {
-          adminId,
-          action: 'PROFILE_VERIFICATION_APPROVED',
-          targetUserId: userId,
-          details: JSON.stringify({
-            previousStatus: user.profileVerificationStatus,
-            newStatus: 'Profile Verified',
-            userName: `${user.firstName} ${user.lastName}`
-          })
-        }
-      });
-      console.log('[approveProfileVerification] Activity log created for:', user.firstName, user.lastName);
-    } catch (logError) {
-      console.error('[approveProfileVerification] Failed to create activity log:', logError.message);
-    }
+    // Log admin activity to both tables
+    await logAdminActivityToBothTables({
+      adminId,
+      action: 'PROFILE_VERIFICATION_APPROVED',
+      targetUserId: userId,
+      details: {
+        previousStatus: user.profileVerificationStatus,
+        newStatus: 'Profile Verified',
+        userName: `${user.firstName} ${user.lastName}`
+      },
+      req
+    });
     
     // Send approval email to user
     try {
@@ -878,19 +911,18 @@ const rejectProfileVerification = async (req, res) => {
       }
     });
     
-    // Log admin activity
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId,
-        action: 'PROFILE_VERIFICATION_REJECTED',
-        targetUserId: userId,
-        details: JSON.stringify({
-          previousStatus: user.profileVerificationStatus,
-          newStatus: 'Rejected',
-          reason: reason,
-          userName: `${user.firstName} ${user.lastName}`
-        })
-      }
+    // Log admin activity to both tables
+    await logAdminActivityToBothTables({
+      adminId,
+      action: 'PROFILE_VERIFICATION_REJECTED',
+      targetUserId: userId,
+      details: {
+        previousStatus: user.profileVerificationStatus,
+        newStatus: 'Rejected',
+        reason: reason,
+        userName: `${user.firstName} ${user.lastName}`
+      },
+      req
     });
     
     // Send rejection email to user
