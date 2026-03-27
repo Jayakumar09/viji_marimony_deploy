@@ -26,6 +26,7 @@ import AdminUserProfile from './AdminUserProfile';
 import ProfileShareModal from '../components/ProfileShareModal';
 import ActivityLogsPage from '../admin/ActivityLogs/ActivityLogs.jsx';
 import toast from 'react-hot-toast';
+import PaymentVerificationTest from './PaymentVerificationTest';
 
 // Sidebar width
 const DRAWER_WIDTH = 280;
@@ -346,6 +347,7 @@ const AdminPanel = () => {
           <Route path="/users" element={<UserManagement />} />
           <Route path="/users/:id" element={<AdminUserProfile />} />
           <Route path="/subscriptions" element={<SubscriptionManagement />} />
+          <Route path="/subscriptions/payment-test/:paymentId" element={<PaymentVerificationTest />} />
           <Route path="/chat" element={<AdminChat />} />
           <Route path="/logs" element={<ActivityLogsPage />} />
           <Route path="/settings" element={<AdminSettings />} />
