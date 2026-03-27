@@ -608,10 +608,10 @@ const checkPhotoVerificationStatus = async (userId) => {
 
 // Subscription plans configuration
 const SUBSCRIPTION_PLANS = [
-  { id: 'FREE', name: 'Free', price: 0, duration: 0 },
-  { id: 'STANDARD', name: 'Standard', price: 999, duration: 365 },
-  { id: 'PREMIUM', name: 'Premium', price: 2499, duration: 365 },
-  { id: 'ELITE', name: 'Elite', price: 4999, duration: 365 }
+  { id: 'FREE', name: 'Free', price: 0, duration: 0, successFee: 0 },
+  { id: 'BASIC', name: 'Basic', price: 1000, duration: 30, successFee: 25000 },
+  { id: 'PRO', name: 'Pro', price: 2000, duration: 90, successFee: 50000 },
+  { id: 'PREMIUM', name: 'Premium', price: 5000, duration: 180, successFee: 100000 }
 ];
 
 // Create or update user subscription

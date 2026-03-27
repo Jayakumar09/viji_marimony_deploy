@@ -1304,7 +1304,7 @@ const AdminUserProfile = () => {
             Select a new subscription plan for this user.
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {['FREE', 'STANDARD', 'PREMIUM', 'ELITE'].map((plan) => (
+            {['FREE', 'BASIC', 'PRO', 'PREMIUM'].map((plan) => (
               <Chip
                 key={plan}
                 label={plan}
