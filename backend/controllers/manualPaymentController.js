@@ -12,7 +12,7 @@
 
 const manualPaymentService = require('../services/manualPaymentService');
 const paymentConfig = require('../config/payments');
-const { upload } = require('../utils/upload');
+const { upload, cloudinary, isCloudinaryConfigured } = require('../utils/upload');
 const path = require('path');
 const fs = require('fs');
 
@@ -130,22 +130,30 @@ const submitPaymentProof = async (req, res) => {
       return res.status(400).json({ error: 'Payment proof file is required' });
     }
 
-    // Get the URL - could be Cloudinary URL or local path
-    // req.file.path contains the path, if it starts with 'http' it's a Cloudinary URL
-    let proofUrl = req.file.path || req.file.filename;
+    let proofUrl;
     
-    // If it's not a full URL, make it a proper path
-    if (!proofUrl.startsWith('http')) {
-      // Check if it's a cloudinary path (contains cloudinary.com)
-      if (proofUrl.includes('cloudinary')) {
-        // Already a cloudinary URL, keep as is
-      } else if (proofUrl.startsWith('/uploads/')) {
-        proofUrl = proofUrl; // Keep as /uploads/...
-      } else {
-        // Extract just the filename and create /uploads/filename path
-        const filename = path.basename(proofUrl);
-        proofUrl = `/uploads/${filename}`;
+    // Upload directly to Cloudinary to get the URL
+    if (isCloudinaryConfigured()) {
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'boyar-matrimony/payment_proofs',
+          resource_type: 'image',
+          transformation: [
+            { width: 1500, height: 1500, crop: 'limit' },
+            { quality: 'auto:good' },
+            { fetch_format: 'auto' }
+          ]
+        });
+        proofUrl = result.secure_url;
+        console.log('[PaymentProof] Cloudinary upload success:', proofUrl);
+      } catch (cloudinaryError) {
+        console.error('[PaymentProof] Cloudinary upload error:', cloudinaryError);
+        // Fallback to local path if Cloudinary fails
+        proofUrl = `/uploads/${path.basename(req.file.path)}`;
       }
+    } else {
+      // Use local path
+      proofUrl = `/uploads/${path.basename(req.file.path)}`;
     }
 
     console.log('[PaymentProof] Uploaded file info:', { path: req.file.path, filename: req.file.filename, url: proofUrl });
