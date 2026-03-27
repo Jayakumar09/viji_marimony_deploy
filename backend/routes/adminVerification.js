@@ -47,20 +47,24 @@ const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, det
       try {
         const user = await prisma.user.findUnique({
           where: { id: targetUserId },
-          select: { customId: true, firstName: true, lastName: true }
+          select: { customId: true, firstName: true, lastName: true, email: true, phone: true }
         });
         if (user) {
           userCustomId = user.customId;
-          // Enrich details with customId if details is an object
+          console.log('[ActivityLog] Found user for logging:', { customId: user.customId, name: `${user.firstName} ${user.lastName}` });
+          // Enrich details with customId and alternative identifiers if details is an object
           if (details && typeof details === 'object') {
             enrichedDetails = {
               ...details,
-              userCustomId: userCustomId
+              userCustomId: userCustomId || `ID:${targetUserId.substring(0,8)}`,
+              userIdentifier: userCustomId || user.email || user.phone || `ID:${targetUserId.substring(0,8)}`
             };
           }
+        } else {
+          console.log('[ActivityLog] User not found for ID:', targetUserId);
         }
       } catch (err) {
-        // Ignore - continue without customId
+        console.error('[ActivityLog] Error fetching user:', err.message);
       }
     }
     
@@ -69,35 +73,45 @@ const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, det
     const userAgent = req ? req.get('User-Agent') : null;
     
     // 1. Log to admin_activity_logs (original table)
-    await prisma.adminActivityLog.create({
-      data: {
-        adminId: safeAdminId,
-        action,
-        targetUserId,
-        details: detailsString,
-        ipAddress,
-        userAgent
-      }
-    });
+    try {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId: safeAdminId,
+          action,
+          targetUserId,
+          details: detailsString,
+          ipAddress,
+          userAgent
+        }
+      });
+      console.log('[ActivityLog] admin_activity_logs created successfully');
+    } catch (logErr) {
+      console.error('[ActivityLog] Failed to create admin_activity_logs:', logErr.message);
+    }
     
     // 2. ALSO log to activity_logs (for frontend Activity Logs UI)
     // Use customId as resourceId if available, otherwise use the internal ID
-    await prisma.activityLog.create({
-      data: {
-        actorType: 'ADMIN',
-        actorId: safeAdminId,
-        actorName: adminName,
-        action: action,
-        status: 'Success',
-        details: detailsString,
-        resourceType: targetUserId ? 'USER' : null,
-        resourceId: userCustomId || targetUserId || null,
-        ipAddress,
-        userAgent
-      }
-    });
+    try {
+      await prisma.activityLog.create({
+        data: {
+          actorType: 'ADMIN',
+          actorId: safeAdminId,
+          actorName: adminName,
+          action: action,
+          status: 'Success',
+          details: detailsString,
+          resourceType: targetUserId ? 'USER' : null,
+          resourceId: userCustomId || targetUserId || null,
+          ipAddress,
+          userAgent
+        }
+      });
+      console.log('[ActivityLog] activity_logs created successfully');
+    } catch (logErr) {
+      console.error('[ActivityLog] Failed to create activity_logs:', logErr.message);
+    }
     
-    console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId });
+    console.log('[ActivityLog] Created in both tables:', { adminId: safeAdminId, action, targetUserId, userCustomId });
   } catch (error) {
     console.error('[ActivityLog] Error:', error.message);
   }

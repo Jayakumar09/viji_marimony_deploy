@@ -941,20 +941,24 @@ const logAdminActivity = async ({ adminId, action, targetUserId, details, req })
       try {
         const user = await prisma.user.findUnique({
           where: { id: targetUserId },
-          select: { customId: true, firstName: true, lastName: true }
+          select: { customId: true, firstName: true, lastName: true, email: true, phone: true }
         });
         if (user) {
           userCustomId = user.customId;
-          // Enrich details with customId if details is an object
+          console.log('[ActivityLog] Found user for logging:', { customId: user.customId, name: `${user.firstName} ${user.lastName}` });
+          // Enrich details with customId and alternative identifiers if details is an object
           if (details && typeof details === 'object') {
             enrichedDetails = {
               ...details,
-              userCustomId: userCustomId
+              userCustomId: userCustomId || `ID:${targetUserId.substring(0,8)}`,
+              userIdentifier: userCustomId || user.email || user.phone || `ID:${targetUserId.substring(0,8)}`
             };
           }
+        } else {
+          console.log('[ActivityLog] User not found for ID:', targetUserId);
         }
       } catch (err) {
-        // Ignore - continue without customId
+        console.error('[ActivityLog] Error fetching user:', err.message);
       }
     }
     
