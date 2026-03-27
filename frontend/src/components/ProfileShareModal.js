@@ -216,15 +216,6 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       window.URL.revokeObjectURL(url);
       
       toast.success('PDF downloaded successfully!');
-      
-      // Log activity
-      await logActivity('DOWNLOAD_PROFILE_PDF', {
-        userId: userId,
-        userCustomId: profileData?.customId,
-        userName: profileData?.firstName,
-        shareType: shareOption,
-        timestamp: new Date().toISOString()
-      });
     } catch (error) {
       console.error('PDF download error:', error);
       // Fallback to frontend PDF generation
@@ -233,6 +224,15 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       toast.success('PDF downloaded successfully!');
     } finally {
       setLoading(false);
+      
+      // Log activity - runs regardless of success or fallback
+      await logActivity('DOWNLOAD_PROFILE_PDF', {
+        userId: userId,
+        userCustomId: profileData?.customId,
+        userName: profileData?.firstName,
+        shareType: shareOption,
+        timestamp: new Date().toISOString()
+      });
     }
   };
 
