@@ -23,10 +23,9 @@ const PaymentVerificationTest = () => {
         const paymentList = response.data.payments || [];
         setPayments(paymentList);
         
-        // Auto-select payment with transaction ID PAYTM12346
-        const targetPayment = paymentList.find(p => p.transactionId === 'PAYTM12346');
-        if (targetPayment) {
-          setSelectedPayment(targetPayment);
+        // Select first payment if available
+        if (paymentList.length > 0) {
+          setSelectedPayment(paymentList[0]);
         }
       } catch (err) {
         console.error('Error fetching payments:', err);
@@ -60,10 +59,26 @@ const PaymentVerificationTest = () => {
 
   // Debug for selected payment
   const rawProof = selectedPayment?.paymentProof;
-  const processedUrl = rawProof ? getImageUrl(rawProof) : '';
-
-  console.log('[PaymentTest] Raw paymentProof:', rawProof);
-  console.log('[PaymentTest] Processed URL:', processedUrl);
+  
+  // Process the URL with detailed logging
+  let processedUrl = '';
+  if (rawProof) {
+    console.log('[PaymentTest] Processing paymentProof:', rawProof);
+    
+    // Check if it's already a full URL
+    if (rawProof.startsWith('http')) {
+      processedUrl = rawProof;
+      console.log('[PaymentTest] Already a full URL, using as-is');
+    } else if (rawProof.startsWith('/uploads')) {
+      // Use getImageUrl for local uploads
+      processedUrl = getImageUrl(rawProof);
+      console.log('[PaymentTest] Local /uploads path, getImageUrl result:', processedUrl);
+    } else {
+      // Try with leading slash
+      processedUrl = getImageUrl('/' + rawProof);
+      console.log('[PaymentTest] Added leading slash, getImageUrl result:', processedUrl);
+    }
+  }
 
   return (
     <Box p={3} maxWidth={1200} mx="auto">
