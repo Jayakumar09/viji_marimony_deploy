@@ -142,7 +142,9 @@ const submitPaymentProof = async (req, res) => {
       } else if (proofUrl.startsWith('/uploads/')) {
         proofUrl = proofUrl; // Keep as /uploads/...
       } else {
-        proofUrl = `/uploads/${path.basename(proofUrl)}`;
+        // Extract just the filename and create /uploads/filename path
+        const filename = path.basename(proofUrl);
+        proofUrl = `/uploads/${filename}`;
       }
     }
 

@@ -12,6 +12,14 @@
 
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+
+// Serve uploaded payment proof files
+const uploadsDir = path.join(__dirname, '../uploads');
+if (fs.existsSync(uploadsDir)) {
+  router.use('/uploads', express.static(uploadsDir));
+}
 
 // Import controller
 const manualPaymentController = require('../controllers/manualPaymentController');
