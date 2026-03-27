@@ -492,7 +492,7 @@ const getUserPaymentNotifications = async (req, res) => {
 };
 
 // Export multer upload middleware for 'proof' field
-const getUploadMiddleware = () => multer.single('proof');
+const getUploadMiddleware = () => upload.single('proof');
 
 module.exports = {
   getPlans,
