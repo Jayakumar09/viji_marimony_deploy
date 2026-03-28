@@ -1,6 +1,6 @@
 /**
- * Generate
- * Uses Shared Profile PDF Route the exact same logic as frontend/test-admin-profile-pdf-watermark.js
+ * Generate Shared Profile PDF Route
+ * Uses Prisma (PostgreSQL) for production database
  * 
  * Web Link Format:
  * - Full Profile: /api/shared-profile/:userId
@@ -13,14 +13,13 @@ const router = express.Router();
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
 const axios = require('axios');
+
+// Use Prisma for database
+const { prisma } = require('../utils/database');
 
 const WATERMARK_TEXT = 'Vijayalakshmi Boyar Matrimony';
 const WATERMARK_FONT = 'Helvetica';
-
-// Database path
-const dbPath = path.join(__dirname, '..', 'prisma', 'dev.db');
 
 async function fetchImage(imagePath) {
   try {
@@ -98,54 +97,15 @@ function addSectionHeader(doc, title, y) {
   return y + 18;
 }
 
-function addHeader(doc, subtitle = '') {
-  doc.fillColor('#8B5CF6').rect(0, 0, doc.page.width, 50).fill();
-  doc.fillColor('#FFFFFF').fontSize(20).text(WATERMARK_TEXT, 0, 15, { align: 'center', width: doc.page.width });
-  if (subtitle) {
-    doc.fontSize(10).text(subtitle, 0, 38, { align: 'center', width: doc.page.width });
-  }
-  return 60;
-}
-
-function addField(doc, label, value, x, y, w = 130) {
-  if (!value || value === 'Not provided') return y;
-  doc.fontSize(10).fillColor('#64748b').text(label, x, y, { width: w });
-  doc.fillColor('#1e293b').text(String(value), x + w, y, { width: 220 });
+function addField(doc, label, value, x, y) {
+  doc.fontSize(10).fillColor('#666').text(label, x, y);
+  doc.fillColor('#333').text(value || 'N/A', x + 80, y);
   return y + 14;
 }
 
-function addWatermark(doc, text = WATERMARK_TEXT, opacity = 0.20) {
-  const pageWidth = doc.page.width;
-  const pageHeight = doc.page.height;
-  
-  doc.save();
-  
-  // Larger font size for better visibility
-  const fontSize = 25;
-  const angle = -45;
-  // Increased spacing to avoid double lines
-  const spacingX =300;
-  const spacingY = 300;
-  
-  // Purple color matching app theme
-  doc.fillColor('#8B5CF6').opacity(opacity).font('Helvetica').fontSize(fontSize);
-  
-  // Cover full page with single line watermarks
-  for (let row = -2; row < 12; row++) {
-    const yOffset = row * spacingY;
-    for (let col = -2; col < 8; col++) {
-      const xOffset = col * spacingX + (row % 2) * (spacingX / 2);
-      
-      doc.save();
-      doc.translate(xOffset, yOffset);
-      doc.rotate(angle);
-      doc.text(text, 0, 0, { align: 'center', lineBreak: false, width: 350 });
-      doc.restore();
-    }
-  }
-  
-  doc.restore();
-  doc.opacity(1);
+function addHeader(doc, title) {
+  doc.fontSize(16).fillColor('#8B5CF6').text(title, 40, 40);
+  return 80;
 }
 
 /**
@@ -156,37 +116,30 @@ router.get('/:userId/pages', async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Connect to database
-    const db = new Database(dbPath, { readonly: true });
+    // Fetch user profile using Prisma (PostgreSQL)
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
     
-    // Fetch user profile
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    
-    console.log('Page count for userId:', userId, 'User found:', !!user, 'is_active:', user?.is_active);
+    console.log('Page count for userId:', userId, 'User found:', !!user, 'isActive:', user?.isActive);
     
     if (!user) {
-      db.close();
       return res.status(404).json({ error: 'Profile not found' });
     }
-    
-    if (!user.is_active) {
-      db.close();
+
+    if (!user.isActive) {
       return res.status(404).json({ error: 'Profile not available' });
     }
+
+    // Get profile photo 
+    let profilePhotoUrl = user.profilePhoto;
     
-    // Get profile photo - use the profile_photo field from database
-    // This is separate from gallery photos stored in user.photos
-    let profilePhotoUrl = user.profile_photo;
-    // DO NOT overwrite with photos array - profile photo is stored separately
-    
-    // Get gallery count - all photos in user.photos are gallery photos
-    // Profile photo is stored separately in user.profile_photo
+    // Get gallery count
     let galleryCount = 0;
     if (user.photos) {
       try {
         const parsedPhotos = JSON.parse(user.photos);
         if (Array.isArray(parsedPhotos) && parsedPhotos.length > 0) {
-          // Count all valid URLs (Cloudinary or local uploads)
           galleryCount = parsedPhotos.filter(p =>
             p && typeof p === 'string' && (p.includes('cloudinary') || p.startsWith('/') || p.startsWith('uploads'))
           ).length;
@@ -194,43 +147,39 @@ router.get('/:userId/pages', async (req, res) => {
       } catch {}
     }
     
-    // Skip the old user_gallery_images table query since we only use Cloudinary now
-    
     // Get documents count
     let docsCount = 0;
-    try { 
-      const docs = db.prepare('SELECT * FROM documents WHERE user_id = ?').all(userId);
+    try {
+      const docs = await prisma.userDocument.findMany({
+        where: { userId: userId }
+      });
       docsCount = docs.length;
     } catch {}
     
-    console.log('Page count for userId:', userId, 'galleryCount:', galleryCount, 'docsCount:', docsCount);
+    // Estimate pages needed
+    // Page 1: Profile + Contact + Personal + Family
+    // Page 2: Professional + Education + Horoscope
+    // Page 3+: Gallery (2-3 photos per page)
+    // Last page: Documents
+    let estimatedPages = 3; // Base pages
+    if (galleryCount > 6) {
+      estimatedPages += Math.ceil((galleryCount - 6) / 3);
+    }
+    if (docsCount > 0) {
+      estimatedPages += 1;
+    }
     
-    // Calculate total pages
-    // Page 1: Profile details
-    // Page 2: Professional & Family
-    // Gallery: 1 page per photo
-    // Documents: 1 page per document
-    const profilePages = 1; // Single page for all profile info
-    const galleryPages = galleryCount;
-    const documentPages = docsCount;
-    const totalPages = profilePages + galleryPages + documentPages;
-    
-    db.close();
-    
-    res.json({
-      userId: userId,
-      userName: `${user.first_name} ${user.last_name}`.trim(),
-      profilePages: profilePages,
-      galleryCount: galleryCount,
-      galleryPages: galleryPages,
-      documentCount: docsCount,
-      documentPages: documentPages,
-      totalPages: totalPages
+    return res.json({
+      success: true,
+      pages: estimatedPages,
+      profilePhoto: !!profilePhotoUrl,
+      galleryCount,
+      docsCount
     });
     
   } catch (error) {
-    console.error('Page count error:', error);
-    res.status(500).json({ error: 'Failed to get page count' });
+    console.error('Error getting page count:', error);
+    return res.status(500).json({ error: 'Failed to get page count' });
   }
 });
 
@@ -243,53 +192,44 @@ router.get('/:userId', async (req, res) => {
     const { userId } = req.params;
     const sanitize = req.query.sanitize === 'true';
     
-    // Connect to database
-    const db = new Database(dbPath, { readonly: true });
-    
-    // Fetch user profile
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    
+    // Fetch user profile using Prisma
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
     if (!user) {
-      db.close();
       return res.status(404).json({ error: 'Profile not found' });
     }
-    
-    if (!user.is_active) {
-      db.close();
+
+    if (!user.isActive) {
       return res.status(404).json({ error: 'Profile not available' });
     }
-    
-    // Get profile photo and gallery - profile photo is stored separately in user.profile_photo
-    // ALL photos in user.photos are gallery photos
-    let profilePhotoUrl = user.profile_photo;
+
+    // Get profile photo and gallery
+    let profilePhotoUrl = user.profilePhoto;
     let gallery = [];
     if (user.photos) {
       try {
         const parsedPhotos = JSON.parse(user.photos);
         if (Array.isArray(parsedPhotos) && parsedPhotos.length > 0) {
-          // Get all Cloudinary URLs - these are ALL gallery photos
           gallery = parsedPhotos.filter(p =>
             p && typeof p === 'string' && (p.includes('cloudinary') || p.startsWith('/') || p.startsWith('uploads'))
           );
-          
-          // DO NOT overwrite profilePhotoUrl - keep using user.profile_photo
-          // Profile photo is stored separately in the database
         }
       } catch {}
     }
-    
-    // Skip the old user_gallery_images table query since we only use Cloudinary now
-    
-    console.log('Gallery images for PDF:', userId, 'count:', gallery.length, 'images:', gallery);
-    
-    // Get documents - use the new documents table
+
+    // Get documents
     let docs = [];
-    try { docs = db.prepare('SELECT * FROM documents WHERE user_id = ?').all(userId); } catch {}
-    console.log('Documents for PDF:', userId, 'count:', docs.length);
+    try {
+      docs = await prisma.userDocument.findMany({
+        where: { userId: userId }
+      });
+    } catch {}
     
-    // Prepare filename - use customId as the main ID
-    const customId = user.custom_id || '';
-    const fullName = `${user.first_name}${user.last_name?.replace(/\s+/g, '') || ''}`;
+    // Prepare filename
+    const customId = user.customId || '';
+    const fullName = `${user.firstName}${user.lastName?.replace(/\s+/g, '') || ''}`;
     const displayId = customId || user.id.slice(-8).toUpperCase();
     const fileName = sanitize 
       ? `${fullName}${displayId}_Shared__Profile.pdf`
@@ -309,18 +249,18 @@ router.get('/:userId', async (req, res) => {
     // ========== PAGE 1 ==========
     y = addHeader(doc, 'User Profile Details');
     
-    // Profile Photo - use Cloudinary URL
+    // Profile Photo
     const pBuf = await fetchImage(profilePhotoUrl);
     if (pBuf) { 
-      try { doc.image(pBuf, 40, y, { width: 80, height: 80 }); } catch {} 
+      try { doc.image(pBuf, 40, y, { width: 80, height: 80 }); } catch {}
     }
     
-    doc.fontSize(20).fillColor('#333').text(`${user.first_name} ${user.last_name}`.toUpperCase(), 130, y);
+    doc.fontSize(20).fillColor('#333').text(`${user.firstName} ${user.lastName}`.toUpperCase(), 130, y);
     doc.fontSize(10).fillColor('#666').text(`ID: ${displayId}`, 130, y + 22);
     doc.fillColor('#059669').text('✓ Verified', 130, y + 35);
     
-    // Show subscription tier based on actual value
-    const tier = user.subscription_tier || 'FREE';
+    // Show subscription tier
+    const tier = user.subscriptionTier || 'FREE';
     if (tier !== 'FREE') {
       const tierLabel = tier === 'PREMIUM' ? '★ Premium' : tier === 'PRO' ? '★ Pro' : tier === 'BASIC' ? '★ Basic' : `★ ${tier}`;
       doc.fillColor('#d97706').text(tierLabel, 130, y + 48);
@@ -328,8 +268,7 @@ router.get('/:userId', async (req, res) => {
     
     y = 200;
     
-    // ===== SINGLE COLUMN LAYOUT =====
-    // Contact Information at Y: 200
+    // Contact Information
     y = addSectionHeader(doc, 'Contact Information', y);
     if (sanitize) {
       y = addField(doc, 'Email:', 'Hidden for privacy', 40, y);
@@ -338,7 +277,7 @@ router.get('/:userId', async (req, res) => {
       y = addField(doc, 'Email:', user.email || 'Not provided', 40, y);
       y = addField(doc, 'Phone:', user.phone || 'Not provided', 40, y);
     }
-    y = addField(doc, 'DOB / Age:', `${formatDate(user.date_of_birth)} (${user.age} years)`, 40, y);
+    y = addField(doc, 'DOB / Age:', `${formatDate(user.dateOfBirth)} (${user.age} years)`, 40, y);
     y = addField(doc, 'City:', user.city || 'Not provided', 40, y);
     y = addField(doc, 'State:', user.state || 'Not provided', 40, y);
     y = addField(doc, 'Country:', user.country || 'Not provided', 40, y);
@@ -346,108 +285,106 @@ router.get('/:userId', async (req, res) => {
     // Personal Details
     y = addSectionHeader(doc, 'Personal Details', y);
     y = addField(doc, 'Gender:', user.gender || 'Not provided', 40, y);
-    y = addField(doc, 'Marital Status:', user.marital_status || 'Not provided', 40, y);
+    y = addField(doc, 'Marital Status:', user.maritalStatus || 'Not provided', 40, y);
     y = addField(doc, 'Community:', user.community || 'Not provided', 40, y);
-    y = addField(doc, 'Sub Caste:', user.sub_caste || 'Not provided', 40, y);
+    y = addField(doc, 'Mother Tongue:', user.motherTongue || 'Not provided', 40, y);
     y = addField(doc, 'Height:', user.height || 'Not provided', 40, y);
-    y = addField(doc, 'Weight:', user.weight || 'Not provided', 40, y);
-    y = addField(doc, 'Complexion:', user.complexion || 'Not provided', 40, y);
-    
-    // Professional Details
-    y = addSectionHeader(doc, 'Professional Details', y);
-    y = addField(doc, 'Education:', user.education || 'Not provided', 40, y);
-    y = addField(doc, 'Profession:', user.profession || 'Not provided', 40, y);
-    y = addField(doc, 'Income:', user.income || 'Not provided', 40, y);
+    y = addField(doc, 'Health:', user.health || 'Not provided', 40, y);
     
     // Family Details
     y = addSectionHeader(doc, 'Family Details', y);
-    y = addField(doc, 'Father Name:', user.father_name || 'Not provided', 40, y);
-    y = addField(doc, 'Father Occupation:', user.father_occupation || 'Not provided', 40, y);
-    y = addField(doc, 'Mother Name:', user.mother_name || 'Not provided', 40, y);
-    y = addField(doc, 'Mother Occupation:', user.mother_occupation || 'Not provided', 40, y);
-    y = addField(doc, 'Family Values:', user.family_values || 'Not provided', 40, y);
-    y = addField(doc, 'Family Type:', user.family_type || 'Not provided', 40, y);
-    y = addField(doc, 'Family Status:', user.family_status || 'Not provided', 40, y);
-    y = addField(doc, 'About Family:', user.about_family || 'Not provided', 40, y);
+    y = addField(doc, 'Father Name:', user.fatherName || 'Not provided', 40, y);
+    y = addField(doc, 'Mother Name:', user.motherName || 'Not provided', 40, y);
+    y = addField(doc, 'Siblings:', user.siblings || 'Not provided', 40, y);
+    y = addField(doc, 'Family Type:', user.familyType || 'Not provided', 40, y);
+    y = addField(doc, 'Family Values:', user.familyValues || 'Not provided', 40, y);
     
-    // Horoscope Details
-    y = addSectionHeader(doc, 'Horoscope Details', y);
-    y = addField(doc, 'Raasi:', user.raasi || 'Not provided', 40, y);
-    y = addField(doc, 'Natchathiram:', user.natchathiram || 'Not provided', 40, y);
-    y = addField(doc, 'Dhosam:', user.dhosam || 'Not provided', 40, y);
-    y = addField(doc, 'Birth Time:', user.birth_time || 'Not provided', 40, y);
-    y = addField(doc, 'Birth Place:', user.birth_place || 'Not provided', 40, y);
-    
-    // About
-    y = addSectionHeader(doc, 'About', y);
-    doc.fontSize(10).fillColor('#444').text(user.bio || 'Not provided', 40, y, { width: 480 });
-    
-    // Apply watermark AFTER all content (on top)
-    addWatermark(doc, WATERMARK_TEXT, 0.20);
-    
-    // ========== GALLERY - ONE PHOTO PER PAGE ==========
-    for (let i = 0; i < gallery.length; i++) {
-      doc.addPage();
-      pageNum++;
-      
-      y = addHeader(doc, `Gallery Photo ${i + 1} of ${gallery.length}`);
-      
-      const buf = await fetchImage(gallery[i]);
-      if (buf) {
-        try {
-          const imgWidth = doc.page.width - 80;
-          const imgHeight = doc.page.height - 110;
-          doc.image(buf, 40, 70, { width: imgWidth, height: imgHeight });
-          addWatermark(doc, WATERMARK_TEXT, 0.2);
-        } catch (e) {
-          doc.fontSize(12).fillColor('#666').text('Unable to display image', 40, 200);
-        }
-      } else {
-        doc.fontSize(12).fillColor('#666').text('Image not found', 40, 200);
-      }
-      
-      // Watermark already added above (line 405) when image loaded
+    // Add watermark on page 1 if not sanitized
+    if (!sanitize) {
+      doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
     }
     
-    // ========== DOCUMENTS - ONE PER PAGE ==========
-    for (let i = 0; i < docs.length; i++) {
-      doc.addPage();
-      pageNum++;
-      
-      // Draw header box
-      doc.fillColor('#8B5CF6').rect(30, 20, doc.page.width - 60, 35).fill();
-      doc.fillColor('#FFFFFF').fontSize(14).text(`Document ${i + 1} of ${docs.length}`, 40, 30, { align: 'center' });
-      
-      y = 70;
-      doc.fontSize(12).fillColor('#333').text(`Type: ${docs[i].document_type || 'N/A'}`, 40, y);
-      doc.fontSize(12).fillColor('#333').text(`File Name: ${docs[i].file_name || 'N/A'}`, 40, y + 18);
-      doc.fontSize(12).fillColor('#333').text(`Status: ${docs[i].status || 'N/A'}`, 40, y + 36);
-      
-      // Show document image FIRST (like gallery pages)
-      if (docs[i].document_url) {
-        const docBuf = await fetchImage(docs[i].document_url);
-        if (docBuf) {
-          try {
-            y = 120;
-            doc.image(docBuf, 40, y, { width: doc.page.width - 80, height: doc.page.height - 160 });
-          } catch (e) {
-            doc.fontSize(12).fillColor('#666').text('Unable to display document', 40, 150);
+    // ========== PAGE 2 ==========
+    doc.addPage();
+    y = 40;
+    
+    // Professional Details
+    y = addSectionHeader(doc, 'Professional Details', y);
+    y = addField(doc, 'Occupation:', user.occupation || 'Not provided', 40, y);
+    y = addField(doc, 'Employer:', user.employer || 'Not provided', 40, y);
+    y = addField(doc, 'Annual Income:', user.annualIncome || 'Not provided', 40, y);
+    y = addField(doc, 'Work Location:', user.workLocation || 'Not provided', 40, y);
+    
+    // Education
+    y = addSectionHeader(doc, 'Education Details', y);
+    y = addField(doc, 'Education:', user.education || 'Not provided', 40, y);
+    y = addField(doc, 'College:', user.college || 'Not provided', 40, y);
+    y = addField(doc, 'School:', user.school || 'Not provided', 40, y);
+    
+    // Horoscope
+    y = addSectionHeader(doc, 'Horoscope Details', y);
+    y = addField(doc, 'Rasi:', user.rasi || 'Not provided', 40, y);
+    y = addField(doc, 'Natchathiram:', user.natchathiram || 'Not provided', 40, y);
+    y = addField(doc, 'Dosham:', user.dosham || 'None', 40, y);
+    
+    // Add watermark on page 2
+    if (!sanitize) {
+      doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
+    }
+    
+    // ========== GALLERY PAGES ==========
+    if (gallery.length > 0) {
+      for (let i = 0; i < gallery.length; i += 3) {
+        doc.addPage();
+        y = 40;
+        
+        const pagePhotos = gallery.slice(i, i + 3);
+        y = addSectionHeader(doc, `Gallery Photos (${i + 1}-${Math.min(i + 3, gallery.length)})`, y);
+        
+        for (let j = 0; j < pagePhotos.length; j++) {
+          const imgBuf = await fetchImage(pagePhotos[j]);
+          if (imgBuf) {
+            try {
+              doc.image(imgBuf, 40 + (j * 180), y, { width: 160, height: 180 });
+            } catch {}
           }
         }
+        
+        y += 200;
+        
+        // Add watermark
+        if (!sanitize) {
+          doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
+        }
       }
-      
-      // Apply watermark AFTER image - so it appears ON TOP (like gallery pages)
-      addWatermark(doc, WATERMARK_TEXT, 0.2);
     }
     
+    // ========== DOCUMENTS PAGE ==========
+    if (docs.length > 0) {
+      doc.addPage();
+      y = 40;
+      
+      y = addSectionHeader(doc, 'Documents', y);
+      
+      for (const docItem of docs) {
+        y = addField(doc, 'Document:', docItem.documentType || 'Document', 40, y);
+        if (y > 700) {
+          doc.addPage();
+          y = 40;
+        }
+      }
+      
+      // Add watermark
+      if (!sanitize) {
+        doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
+      }
+    }
+    
+    // Finalize PDF
     doc.end();
     
-    db.close();
-    
-    console.log(`Shared profile PDF generated for ${userId}, pages: ${pageNum}, sanitize: ${sanitize}`);
-    
   } catch (error) {
-    console.error('Shared profile PDF generation error:', error);
+    console.error('Error generating PDF:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to generate PDF' });
     }
