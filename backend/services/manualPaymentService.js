@@ -417,6 +417,50 @@ const getAdminPayments = async (page = 1, limit = 20, status = null) => {
 };
 
 /**
+ * Get single payment by ID (Admin)
+ * @param {string} paymentId - Payment ID
+ * @returns {Promise<Object>} Payment details with user info
+ */
+const getAdminPaymentById = async (paymentId) => {
+  const payment = await prisma.payments.findUnique({
+    where: { id: paymentId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true
+        }
+      }
+    }
+  });
+
+  if (!payment) {
+    throw new Error('Payment not found');
+  }
+
+  return {
+    id: payment.id,
+    orderId: payment.orderId,
+    amount: payment.amountINR,
+    planId: payment.planId,
+    planName: payment.planName,
+    planDuration: payment.planDuration,
+    method: payment.paymentMethod,
+    status: payment.paymentStatus,
+    transactionId: payment.transactionId,
+    paymentProof: payment.paymentProof ? (payment.paymentProof.startsWith('http') ? payment.paymentProof : `${process.env.SERVER_URL || 'https://viji-marimony-new.onrender.com'}${payment.paymentProof}`) : null,
+    paymentDate: payment.paymentDate,
+    createdAt: payment.createdAt,
+    rejectionReason: payment.rejectionReason,
+    verifiedAt: payment.verifiedAt,
+    user: payment.user
+  };
+};
+
+/**
  * Verify and approve payment (Admin)
  * @param {Object} params - Verification parameters
  * @param {string} params.paymentId - Payment ID
@@ -834,6 +878,7 @@ module.exports = {
   cancelPayment,
   // Admin functions
   getAdminPayments,
+  getAdminPaymentById,
   approvePayment,
   rejectPayment,
   getPaymentStats,

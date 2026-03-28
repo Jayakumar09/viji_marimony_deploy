@@ -189,6 +189,21 @@ const getPaymentHistory = async (req, res) => {
 };
 
 /**
+ * GET /api/payments/admin/:id
+ * Get payment details (Admin)
+ */
+const getAdminPaymentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await manualPaymentService.getAdminPaymentById(id);
+    res.json(result);
+  } catch (error) {
+    console.error('Get admin payment details error:', error);
+    res.status(404).json({ error: error.message });
+  }
+};
+
+/**
  * GET /api/payments/:id
  * Get payment details
  */
@@ -512,6 +527,7 @@ module.exports = {
   initiatePayment,
   submitPaymentProof,
   getPaymentHistory,
+  getAdminPaymentById,
   getPaymentDetails,
   cancelPayment,
   // Admin

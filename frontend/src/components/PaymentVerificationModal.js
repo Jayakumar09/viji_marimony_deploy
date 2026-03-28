@@ -17,11 +17,10 @@ const PaymentVerificationModal = ({ paymentId, open, onClose }) => {
         try {
             setLoading(true);
             setError(null);
-            // Use the correct API endpoint for getting payment details
-            const response = await api.get(`/payments/${paymentId}`);
-            const payment = response.data.payment || response.data;
-            setPaymentData(payment);
-            console.log('[PaymentVerificationModal] Payment data:', payment);
+            // Use the admin API endpoint for getting payment details
+            const response = await api.get(`/payments/admin/${paymentId}`);
+            setPaymentData(response.data);
+            console.log('[PaymentVerificationModal] Payment data:', response.data);
         } catch (err) {
             console.error('[PaymentVerificationModal] Error fetching payment:', err);
             setError('Failed to load payment details. Please try again.');

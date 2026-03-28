@@ -144,6 +144,12 @@ router.get('/admin/:id/messages', adminAuthMiddleware, manualPaymentController.g
 // ============ PARAMETERIZED ROUTES (Must come AFTER specific routes) ============
 
 /**
+ * GET /api/payments/admin/:id
+ * Get payment details (Admin)
+ */
+router.get('/admin/:id', adminAuthMiddleware, manualPaymentController.getAdminPaymentById);
+
+/**
  * GET /api/payments/:id
  * Get payment details
  */
