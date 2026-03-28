@@ -108,6 +108,7 @@ const paymentRoutes = require('./routes/payments');
 const chatRoutes = require('./routes/chat');
 const profilePdfRoutes = require('./routes/profilePdf');
 const activityLogsModule = require('./modules/ActivityLogs/ActivityLogs');
+const generateSharedProfile = require('./routes/generateSharedProfile');
 
 // SSE Service for real-time updates
 const sseService = require('./services/sseService');
@@ -168,7 +169,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/profile-pdf', profilePdfRoutes);
 app.use('/api/activity-logs', activityLogsModule.router);
-// app.use('/api/shared-profile', generateSharedProfile);
+app.use('/api/shared-profile', generateSharedProfile);
 
 // SSE endpoint for real-time updates
 app.options('/api/sse', (req, res) => {
