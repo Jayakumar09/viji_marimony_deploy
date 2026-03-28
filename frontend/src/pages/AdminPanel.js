@@ -1847,6 +1847,18 @@ const SubscriptionManagement = () => {
     }
   };
 
+  // Handle request for user to re-upload payment proof
+  const handleRequestReupload = async (paymentId) => {
+    try {
+      await api.post(`/payments/admin/${paymentId}/messages`, {
+        message: 'Your payment proof image is not accessible. Please re-upload your payment screenshot with clear visibility. Go to My Account > Payment History > Upload Payment Proof.'
+      });
+      toast.success('Re-upload request sent to user');
+    } catch (error) {
+      toast.error('Failed to send re-upload request');
+    }
+  };
+
   const viewPaymentProof = (payment) => {
     setSelectedPayment(payment);
     setProofDialog(true);
@@ -2150,25 +2162,41 @@ const SubscriptionManagement = () => {
                       <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', wordBreak: 'break-all' }}>
                         URL: {selectedPayment.paymentProof}
                       </Typography>
-                      <Box
-                        component="img"
-                        src={selectedPayment.paymentProof?.startsWith('http') 
-                          ? selectedPayment.paymentProof 
-                          : getImageUrl(selectedPayment.paymentProof)}
-                        alt="Payment Proof"
-                        sx={{
-                          width: '100%',
-                          borderRadius: 2,
-                          border: '1px solid #e0e0e0',
-                          maxHeight: 400,
-                          objectFit: 'contain'
-                        }}
-                        onError={(e) => {
-                          console.error('Payment proof image load error:', e);
-                          e.target.src = 'https://via.placeholder.com/400x300?text=Image+Load+Failed';
-                        }}
-                        onLoad={() => console.log('Payment proof loaded successfully')}
-                      />
+                      
+                      {/* Check if it's a valid Cloudinary or accessible URL */}
+                      {selectedPayment.paymentProof.startsWith('http') && !selectedPayment.paymentProof.includes('your-render-backend') ? (
+                        <Box
+                          component="img"
+                          src={selectedPayment.paymentProof}
+                          alt="Payment Proof"
+                          sx={{
+                            width: '100%',
+                            borderRadius: 2,
+                            border: '1px solid #e0e0e0',
+                            maxHeight: 400,
+                            objectFit: 'contain'
+                          }}
+                          onError={(e) => {
+                            console.error('Payment proof image load error:', e);
+                            e.target.style.display = 'none';
+                          }}
+                          onLoad={() => console.log('Payment proof loaded successfully')}
+                        />
+                      ) : (
+                        <Alert severity="warning" sx={{ mt: 1 }}>
+                          <strong>Invalid or inaccessible payment proof URL.</strong>
+                          <br />
+                          Please request the user to re-upload their payment proof.
+                          <Button 
+                            size="small" 
+                            color="primary" 
+                            onClick={() => handleRequestReupload(selectedPayment.id)}
+                            sx={{ mt: 1, display: 'block' }}
+                          >
+                            Send Re-upload Request
+                          </Button>
+                        </Alert>
+                      )}
                     </Box>
                   ) : (
                     <Alert severity="warning">No payment proof uploaded</Alert>
