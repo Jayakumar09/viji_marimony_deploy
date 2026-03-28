@@ -133,27 +133,27 @@ const submitPaymentProof = async (req, res) => {
     let proofUrl;
     
     // Upload directly to Cloudinary to get the URL
-    if (isCloudinaryConfigured()) {
-      try {
-        const result = await cloudinary.uploader.upload(req.file.path, {
-          folder: 'boyar-matrimony/payment_proofs',
-          resource_type: 'image',
-          transformation: [
-            { width: 1500, height: 1500, crop: 'limit' },
-            { quality: 'auto:good' },
-            { fetch_format: 'auto' }
-          ]
-        });
-        proofUrl = result.secure_url;
-        console.log('[PaymentProof] Cloudinary upload success:', proofUrl);
-      } catch (cloudinaryError) {
-        console.error('[PaymentProof] Cloudinary upload error:', cloudinaryError);
-        // Fallback to local path if Cloudinary fails
-        proofUrl = `/uploads/${path.basename(req.file.path)}`;
-      }
-    } else {
-      // Use local path
-      proofUrl = `/uploads/${path.basename(req.file.path)}`;
+    // CRITICAL: All payment proofs MUST be stored in Cloudinary only
+    if (!isCloudinaryConfigured()) {
+      return res.status(500).json({ error: 'Cloudinary is not configured. Payment proof upload requires Cloudinary.' });
+    }
+    
+    try {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'boyar-matrimony/payment_proofs',
+        resource_type: 'image',
+        transformation: [
+          { width: 1500, height: 1500, crop: 'limit' },
+          { quality: 'auto:good' },
+          { fetch_format: 'auto' }
+        ]
+      });
+      proofUrl = result.secure_url;
+      console.log('[PaymentProof] Cloudinary upload success:', proofUrl);
+    } catch (cloudinaryError) {
+      console.error('[PaymentProof] Cloudinary upload error:', cloudinaryError);
+      // NO fallback to local - must use Cloudinary
+      return res.status(500).json({ error: 'Failed to upload payment proof to Cloudinary. Please try again.' });
     }
 
     console.log('[PaymentProof] Uploaded file info:', { path: req.file.path, filename: req.file.filename, url: proofUrl });

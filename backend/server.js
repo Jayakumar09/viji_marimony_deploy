@@ -76,6 +76,10 @@ if (!fs.existsSync(uploadsPath)) {
     console.log('Note: uploads folder not created');
   }
 }
+
+// Serve static files from main uploads folder
+// Note: NEW payment proofs are stored in Cloudinary only
+// This serves only for backward compatibility with existing local files
 app.use('/uploads', express.static(uploadsPath));
 
 // API routes
