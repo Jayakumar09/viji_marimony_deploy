@@ -27,6 +27,7 @@ import ProfileShareModal from '../components/ProfileShareModal';
 import ActivityLogsPage from '../admin/ActivityLogs/ActivityLogs.jsx';
 import toast from 'react-hot-toast';
 import PaymentVerificationTest from './PaymentVerificationTest';
+import PaymentVerificationModal from '../components/PaymentVerificationModal';
 
 // Sidebar width
 const DRAWER_WIDTH = 280;
@@ -2144,21 +2145,31 @@ const SubscriptionManagement = () => {
                     Payment Proof
                   </Typography>
                   {selectedPayment.paymentProof ? (
-                    <Box
-                      component="img"
-                      src={getImageUrl(selectedPayment.paymentProof)}
-                      alt="Payment Proof"
-                      sx={{
-                        width: '100%',
-                        borderRadius: 2,
-                        border: '1px solid #e0e0e0',
-                        maxHeight: 400,
-                        objectFit: 'contain'
-                      }}
-                      onError={(e) => {
-                        e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
-                      }}
-                    />
+                    <Box>
+                      {/* Debug: Show the raw proof URL */}
+                      <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', wordBreak: 'break-all' }}>
+                        URL: {selectedPayment.paymentProof}
+                      </Typography>
+                      <Box
+                        component="img"
+                        src={selectedPayment.paymentProof?.startsWith('http') 
+                          ? selectedPayment.paymentProof 
+                          : getImageUrl(selectedPayment.paymentProof)}
+                        alt="Payment Proof"
+                        sx={{
+                          width: '100%',
+                          borderRadius: 2,
+                          border: '1px solid #e0e0e0',
+                          maxHeight: 400,
+                          objectFit: 'contain'
+                        }}
+                        onError={(e) => {
+                          console.error('Payment proof image load error:', e);
+                          e.target.src = 'https://via.placeholder.com/400x300?text=Image+Load+Failed';
+                        }}
+                        onLoad={() => console.log('Payment proof loaded successfully')}
+                      />
+                    </Box>
                   ) : (
                     <Alert severity="warning">No payment proof uploaded</Alert>
                   )}
