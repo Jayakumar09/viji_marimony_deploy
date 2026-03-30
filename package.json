@@ -1,19 +1,12 @@
 {
-  "name": "vijayalakshmi-boyar-matrimony",
+  "name": "viji-matrimony-deploy",
   "version": "1.0.0",
-  "description": "Vijayalakshmi Boyar Matrimony App - A community-focused matrimony platform",
-  "main": "index.js",
+  "description": "Vijayalakshmi Boyar Matrimony App",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd backend && npm run dev",
-    "client": "cd frontend && npm start",
-    "build": "cd frontend && npm run build",
-    "install-deps": "npm install && cd backend && npm install && cd ../frontend && npm install"
+    "start": "cd backend && npm start",
+    "build:frontend": "cd frontend && npm run build"
   },
-  "keywords": ["matrimony", "boyar", "community", "marriage", "dating"],
-  "author": "Vijayalakshmi Jayakumar",
-  "license": "MIT",
-  "devDependencies": {
-    "concurrently": "^8.2.2"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
