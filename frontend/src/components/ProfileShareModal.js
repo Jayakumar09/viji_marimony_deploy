@@ -241,7 +241,7 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
     const isSanitized = shareOption === 'other';
     
     // Use the deployed URL - always use production URL for sharing
-    const baseUrl = 'https://vijayalakshmimarriage.com';
+    const baseUrl = 'https://www.vijayalakshmiboyarmatrimony.com';
     const profileLink = `${baseUrl}/profile/${userId}?sanitize=${isSanitized}`;
     
     // Direct PDF link that can be downloaded
