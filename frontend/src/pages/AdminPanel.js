@@ -384,20 +384,15 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
-      // Use mock data for demo
+      // Don't use mock data - show error state instead
       setStats({
-        totalUsers: 156,
-        verifiedUsers: 89,
-        pendingPhotoVerifications: 12,
-        newUsersToday: 8,
-        premiumUsers: 34,
-        messagesToday: 45
+        totalUsers: 0,
+        verifiedUsers: 0,
+        pendingPhotoVerifications: 0,
+        newUsersToday: 0,
+        premiumUsers: 0,
+        messagesToday: 0
       });
-      setRecentUsers([
-        { id: 1, firstName: 'Rama', lastName: 'Krishna', city: 'Hyderabad', createdAt: new Date() },
-        { id: 2, firstName: 'Sowmya', lastName: 'Reddy', city: 'Bangalore', createdAt: new Date() },
-        { id: 3, firstName: 'Venkatesh', lastName: 'Rao', city: 'Chennai', createdAt: new Date() },
-      ]);
     } finally {
       setLoading(false);
     }
@@ -629,24 +624,9 @@ const PhotoApprovals = () => {
       }));
     } catch (error) {
       console.error('Failed to fetch photos:', error);
-      // Mock data for demo
-      setPhotos([
-        {
-          id: '1',
-          photoUrl: 'https://via.placeholder.com/150',
-          user: { firstName: 'Rama', lastName: 'Krishna', email: 'rama@example.com', city: 'Hyderabad' },
-          photoType: 'profile',
-          createdAt: new Date()
-        },
-        {
-          id: '2',
-          photoUrl: 'https://via.placeholder.com/150',
-          user: { firstName: 'Sowmya', lastName: 'Reddy', email: 'sowmya@example.com', city: 'Bangalore' },
-          photoType: 'horoscope',
-          createdAt: new Date()
-        },
-      ]);
-      setPagination({ page: 1, pages: 1, total: 2 });
+      // No mock data - show empty state
+      setPhotos([]);
+      setPagination({ page: 1, pages: 1, total: 0 });
     } finally {
       setLoading(false);
     }
@@ -1306,25 +1286,9 @@ const UserManagement = () => {
       }));
     } catch (error) {
       console.error('Failed to fetch users:', error);
-      // Mock data
-      setUsers([
-        {
-          id: '1', firstName: 'Rama', lastName: 'Krishna', email: 'rama@example.com',
-          phone: '+91 9876543210', city: 'Hyderabad', state: 'Telangana',
-          isVerified: true, isPremium: true, isActive: true, createdAt: new Date()
-        },
-        {
-          id: '2', firstName: 'Sowmya', lastName: 'Reddy', email: 'sowmya@example.com',
-          phone: '+91 9876543211', city: 'Bangalore', state: 'Karnataka',
-          isVerified: true, isPremium: false, isActive: true, createdAt: new Date()
-        },
-        {
-          id: '3', firstName: 'Venkatesh', lastName: 'Rao', email: 'venkat@example.com',
-          phone: '+91 9876543212', city: 'Chennai', state: 'Tamil Nadu',
-          isVerified: false, isPremium: true, isActive: true, createdAt: new Date()
-        },
-      ]);
-      setPagination({ page: 1, pages: 1, total: 3 });
+      // No mock data - show empty state
+      setUsers([]);
+      setPagination({ page: 1, pages: 1, total: 0 });
     } finally {
       setLoading(false);
     }
