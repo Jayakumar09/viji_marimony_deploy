@@ -31,7 +31,7 @@ const allowedOrigins = isProduction
       'https://vijayalakshmiboyarmatrimony.com',
       'https://www.vijayalakshmiboyarmatrimony.com',
       'https://viji-marimony-deploy-backend.onrender.com',
-      'https://viji-marimony-new.onrender.com',
+      // Old URLs removed for cleanup
     ].filter(Boolean)
   : ['http://localhost:3000', 'http://localhost:3001'];
 
@@ -177,21 +177,36 @@ app.use('/api/profile-pdf', profilePdfRoutes);
 app.use('/api/activity-logs', activityLogsModule.router);
 app.use('/api/shared-profile', generateSharedProfile);
 
+// ============================================
 // SSE endpoint for real-time updates
-app.options('/api/sse', (req, res) => {
+// Custom middleware to handle CORS for SSE
+// ============================================
+app.use('/api/sse', (req, res, next) => {
+  // Set CORS headers specifically for SSE
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.status(200).end();
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
 });
 
 app.get('/api/sse', (req, res) => {
-  // Set SSE headers
+  // Set SSE headers - must be before any other response
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  
+  // Flush headers immediately to establish connection
+  res.flushHeaders();
   
   // Add client to SSE service
   sseService.addClient(res);
@@ -201,7 +216,6 @@ app.get('/api/sse', (req, res) => {
     console.log('SSE client disconnected');
   });
 });
-// app.use('/api/phonepe', phonepeRoutes); // PhonePe integration not implemented - using manual payments
 
 // Error handling middleware
 app.use((err, req, res, next) => {
