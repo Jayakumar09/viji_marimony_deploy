@@ -21,7 +21,11 @@ app.set('trust proxy', 1);
 // CORS configuration - MUST be before other middleware for preflight requests
 // Support both local development and production domains
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-const allowedOrigins = process.env.NODE_ENV === 'production'
+
+// Check if running in production (Render sets this)
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
+const allowedOrigins = isProduction
   ? [
       process.env.FRONTEND_URL, // Dynamic frontend URL
       'https://vijayalakshmiboyarmatrimony.com',
