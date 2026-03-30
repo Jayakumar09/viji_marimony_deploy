@@ -26,6 +26,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       process.env.FRONTEND_URL, // Dynamic frontend URL
       'https://vijayalakshmiboyarmatrimony.com',
       'https://www.vijayalakshmiboyarmatrimony.com',
+      'https://viji-marimony-deploy-backend.onrender.com',
+      'https://viji-marimony-new.onrender.com',
     ].filter(Boolean)
   : ['http://localhost:3000', 'http://localhost:3001'];
 

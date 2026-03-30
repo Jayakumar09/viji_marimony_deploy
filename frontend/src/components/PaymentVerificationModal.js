@@ -37,7 +37,7 @@ const PaymentVerificationModal = ({ paymentId, open, onClose }) => {
             return url;
         }
         // If local path, prepend backend URL
-        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://viji-marimony-new.onrender.com';
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://viji-marimony-deploy-backend.onrender.com';
         return url.startsWith('/') ? `${backendUrl}${url}` : `${backendUrl}/${url}`;
     };
 

@@ -21,7 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 import PasswordField from '../components/PasswordField';
 
-const API_BASE_URL = 'https://viji-marimony-new.onrender.com/api';
+const API_BASE_URL = 'https://viji-marimony-deploy-backend.onrender.com/api';
 
 const ADMIN_EMAIL = 'vijayalakshmijayakumar45@gmail.com';
 

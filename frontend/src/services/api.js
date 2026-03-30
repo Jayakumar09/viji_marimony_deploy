@@ -1,10 +1,10 @@
 import axios from 'axios';
 
 // API Base URL - Configure for production
-// For Render backend: https://viji-marimony-new.onrender.com/api
+// For Render backend: https://viji-marimony-deploy-backend.onrender.com/api
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
   (process.env.NODE_ENV === 'production' 
-    ? 'https://viji-marimony-new.onrender.com/api' 
+    ? 'https://viji-marimony-deploy-backend.onrender.com/api' 
     : 'http://localhost:5001/api');
 
 // Create axios instance with default config
