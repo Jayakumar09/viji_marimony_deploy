@@ -624,6 +624,15 @@ const PhotoApprovals = () => {
       }));
     } catch (error) {
       console.error('Failed to fetch photos:', error);
+      // Debug: Show error details
+      if (error.response) {
+        console.error('Error response status:', error.response.status);
+        console.error('Error response data:', error.response.data);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+      } else {
+        console.error('Error message:', error.message);
+      }
       // No mock data - show empty state
       setPhotos([]);
       setPagination({ page: 1, pages: 1, total: 0 });
@@ -1286,6 +1295,15 @@ const UserManagement = () => {
       }));
     } catch (error) {
       console.error('Failed to fetch users:', error);
+      // Debug: Show error details
+      if (error.response) {
+        console.error('Error response status:', error.response.status);
+        console.error('Error response data:', error.response.data);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+      } else {
+        console.error('Error message:', error.message);
+      }
       // No mock data - show empty state
       setUsers([]);
       setPagination({ page: 1, pages: 1, total: 0 });
