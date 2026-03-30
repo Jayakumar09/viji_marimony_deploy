@@ -3,7 +3,7 @@ services:
     name: viji-marimony-deploy-backend
     region: mumbai
     buildCommand: npm install && cd backend && npm install && npx prisma generate
-    startCommand: node index.js
+    startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
