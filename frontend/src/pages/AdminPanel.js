@@ -1284,9 +1284,13 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      console.log('[DEBUG fetchUsers] Request URL:', `/admin/users?page=${pagination.page}&limit=20&search=${search}&status=${statusFilter}`);
       const response = await api.get(
         `/admin/users?page=${pagination.page}&limit=20&search=${search}&status=${statusFilter}`
       );
+      console.log('[DEBUG fetchUsers] Response received:', response);
+      console.log('[DEBUG fetchUsers] Response data:', response.data);
+      console.log('[DEBUG fetchUsers] Users from response.data.users:', response.data?.users);
       setUsers(response.data.users || []);
       setPagination(prev => ({
         ...prev,
@@ -1294,7 +1298,7 @@ const UserManagement = () => {
         total: response.data.pagination?.total || 0
       }));
     } catch (error) {
-      console.error('Failed to fetch users:', error);
+      console.error('[DEBUG fetchUsers] Error:', error);
       // Debug: Show error details
       if (error.response) {
         console.error('Error response status:', error.response.status);
