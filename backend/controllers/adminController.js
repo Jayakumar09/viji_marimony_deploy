@@ -290,13 +290,15 @@ const getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 20, search = '', status = 'all' } = req.query;
     const skip = (page - 1) * limit;
-    const adminId = req.admin.id;
+    const adminId = req.admin?.id;
     
     // DEBUG: Log database connection info
     const dbType = process.env.DATABASE_URL?.startsWith('postgresql') ? 'PostgreSQL (AWS RDS)' : 'SQLite';
     console.log(`[DEBUG getAllUsers] Database type: ${dbType}`);
     console.log(`[DEBUG getAllUsers] DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
     console.log(`[DEBUG getAllUsers] Request received - adminId: ${adminId}, query:`, req.query);
+    console.log(`[DEBUG getAllUsers] Prisma instance:`, !!prisma);
+    console.log(`[DEBUG getAllUsers] Prisma user model:`, !!prisma?.user);
     
     // Build where clause
     let where = {};
@@ -332,6 +334,10 @@ const getAllUsers = async (req, res) => {
     
     console.log(`[DEBUG getAllUsers] Query params - page: ${page}, limit: ${limit}, search: '${search}', status: '${status}'`);
     console.log(`[DEBUG getAllUsers] Where clause:`, JSON.stringify(where));
+    
+    // Try to get total count first
+    const totalBeforeQuery = await prisma.user.count();
+    console.log(`[DEBUG getAllUsers] Total users in DB (before filter): ${totalBeforeQuery}`);
     
     const users = await prisma.user.findMany({
       where,
@@ -405,7 +411,7 @@ const getAllUsers = async (req, res) => {
     
     const total = await prisma.user.count({ where });
     
-    console.log(`[DEBUG getAllUsers] Total count: ${total}`);
+    console.log(`[DEBUG getAllUsers] Total count (with filter): ${total}`);
     console.log(`[DEBUG getAllUsers] Sending response with ${users.length} users, total: ${total}`);
     
     const responseData = {
