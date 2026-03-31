@@ -98,6 +98,23 @@ app.get('/', (req, res) => {
   });
 });
 
+// DEBUG endpoint to check database status
+app.get('/api/debug/db-status', async (req, res) => {
+  try {
+    const { debugDatabaseStatus } = require('./utils/database');
+    const debugInfo = await debugDatabaseStatus();
+    res.json({
+      success: true,
+      debug: debugInfo
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profile');

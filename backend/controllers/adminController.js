@@ -292,6 +292,11 @@ const getAllUsers = async (req, res) => {
     const skip = (page - 1) * limit;
     const adminId = req.admin.id;
     
+    // DEBUG: Log database connection info
+    const dbType = process.env.DATABASE_URL?.startsWith('postgresql') ? 'PostgreSQL (AWS RDS)' : 'SQLite';
+    console.log(`[DEBUG getAllUsers] Database type: ${dbType}`);
+    console.log(`[DEBUG getAllUsers] DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
+    
     // Build where clause
     let where = {};
     
@@ -323,6 +328,9 @@ const getAllUsers = async (req, res) => {
           break;
       }
     }
+    
+    console.log(`[DEBUG getAllUsers] Query params - page: ${page}, limit: ${limit}, search: '${search}', status: '${status}'`);
+    console.log(`[DEBUG getAllUsers] Where clause:`, JSON.stringify(where));
     
     const users = await prisma.user.findMany({
       where,
@@ -392,7 +400,11 @@ const getAllUsers = async (req, res) => {
       }
     });
     
+    console.log(`[DEBUG getAllUsers] Raw query returned ${users.length} users`);
+    
     const total = await prisma.user.count({ where });
+    
+    console.log(`[DEBUG getAllUsers] Total count: ${total}`);
     
     res.json({
       users,
