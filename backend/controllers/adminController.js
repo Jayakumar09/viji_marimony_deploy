@@ -296,6 +296,7 @@ const getAllUsers = async (req, res) => {
     const dbType = process.env.DATABASE_URL?.startsWith('postgresql') ? 'PostgreSQL (AWS RDS)' : 'SQLite';
     console.log(`[DEBUG getAllUsers] Database type: ${dbType}`);
     console.log(`[DEBUG getAllUsers] DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
+    console.log(`[DEBUG getAllUsers] Request received - adminId: ${adminId}, query:`, req.query);
     
     // Build where clause
     let where = {};
@@ -405,8 +406,9 @@ const getAllUsers = async (req, res) => {
     const total = await prisma.user.count({ where });
     
     console.log(`[DEBUG getAllUsers] Total count: ${total}`);
+    console.log(`[DEBUG getAllUsers] Sending response with ${users.length} users, total: ${total}`);
     
-    res.json({
+    const responseData = {
       users,
       pagination: {
         page: parseInt(page),
@@ -414,7 +416,15 @@ const getAllUsers = async (req, res) => {
         total,
         pages: Math.ceil(total / limit)
       }
+    };
+    
+    console.log(`[DEBUG getAllUsers] Response structure:`, {
+      hasUsers: !!responseData.users,
+      usersLength: responseData.users?.length,
+      pagination: responseData.pagination
     });
+    
+    res.json(responseData);
     
     // Log the activity
     if (users.length > 0) {
