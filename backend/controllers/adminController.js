@@ -432,12 +432,12 @@ const getAllUsers = async (req, res) => {
     
     res.json(responseData);
     
-    // Log the activity
-    if (users.length > 0) {
-      // Log the activity to both tables
-      await logAdminActivityToBothTables({
-        adminId,
-        action: 'VIEW_USER_LIST',
+    // Log the activity (wrapped in try-catch to prevent crashes)
+    if (users.length > 0 && adminId) {
+      try {
+        await logAdminActivityToBothTables({
+          adminId,
+          action: 'VIEW_USER_LIST',
         details: {
           page,
           limit,
