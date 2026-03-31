@@ -2,22 +2,38 @@
 
 A community-focused matrimony platform for the Boyar community.
 
-## 📋 Project Status
-- ✅ Backend API fully functional (Express.js on port 5001)
-- ✅ Frontend UI operational (React.js on port 3000)
-- ✅ Database configured (SQLite)
-- ✅ User authentication working (JWT)
-- ✅ Profile management with image handling
-- ✅ Image compression (<50KB automatic)
-- ✅ Indian state/city dropdowns (cascading)
-- ✅ Gallery support (up to 9 images per user)
-- ✅ Email & Phone OTP Verification
-- ✅ Admin Photo Verification System
-- ✅ Horoscope Details (Raasi, Natchathiram, Lagnam, Dhosam)
-- ✅ Family Background (Father & Mother details)
-- ✅ Subscription Plans with Success Fee
-- ✅ Mandatory Documents Upload
-- ✅ **Chat System** (User-Admin real-time chat with message deletion)
+## 📋 Project Status (As of March 31, 2026)
+
+### 🚀 Live Deployment
+- **Frontend**: https://vijayalakshmiboyarmatrimony.com (Cloudflare Pages)
+- **Backend API**: https://viji-marimony-deploy-backend.onrender.com (Render)
+- **Database**: AWS RDS PostgreSQL (Production)
+- **Cloudinary**: Configured and working
+
+### ✅ Current System Status
+- **Total Users**: 2 (Active)
+- **Admin Dashboard**: Working correctly
+- **User Management**: Displaying users successfully
+- **Auto-Deploy**: GitHub Actions connected
+
+### 📊 Active Features
+- User Registration & Authentication (JWT)
+- Profile Management with photo upload
+- Gallery (up to 9 images per user)
+- Email & Phone OTP Verification
+- Admin Photo Verification System
+- Subscription Plans (Free/Basic/Premium)
+- Chat System (User-Admin real-time)
+- Payment Processing (UPI/Manual)
+- Profile PDF Generation
+- Shared Profile Links
+
+### 🔧 Auto-Deployment Status
+- **Backend**: Auto-deploys to Render on every push to master
+- **Frontend**: Auto-deploys to Cloudflare Pages on every push to master
+- Both deployments triggered by GitHub Actions
+
+## 📋 Project Status (Legacy)
 
 ## Project Structure
 
@@ -439,6 +455,12 @@ Admin can now view images in full size before Approve/Reject:
 - **Auto Deploy**: GitHub Actions linked to both Render (backend) and Cloudflare (frontend)
 
 ## 🆕 RECENT UPDATES (March 2026)
+
+### Admin Dashboard Total Users Fix (March 31, 2026)
+- **Issue**: Admin dashboard showed "Total Users = 0" despite database having 2 users
+- **Root Cause**: GitHub Actions workflow had wrong API URL in build step
+- **Fix**: Changed `REACT_APP_API_URL` from `viji-marimony-new.onrender.com` to `viji-marimony-deploy-backend.onrender.com`
+- **Result**: Admin dashboard now correctly displays Total Users: 2
 
 ### GitHub Actions Auto-Deployment (NEW!)
 - Added `.github/workflows/deploy.yml` for automatic deployment
