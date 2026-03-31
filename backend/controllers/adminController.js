@@ -447,6 +447,9 @@ const getAllUsers = async (req, res) => {
         },
         req
       });
+      } catch (activityError) {
+        console.error('Failed to log admin activity:', activityError);
+      }
     }
   } catch (error) {
     console.error('Get all users error:', error);
