@@ -434,7 +434,7 @@ Admin can now view images in full size before Approve/Reject:
 **You now have 2 working URLs:**
 - **Cloudflare default** (for testing): https://viji-marimony-deploy.pages.dev
 - **Your custom domain** (main site): https://vijayalakshmiboyarmatrimony.com
-- **Backend API**: https://viji-marimony-new.onrender.com
+- **Backend API**: https://viji-marimony-deploy-backend.onrender.com
 - **Database**: AWS RDS PostgreSQL
 - **Auto Deploy**: GitHub Actions linked to both Render (backend) and Cloudflare (frontend)
 

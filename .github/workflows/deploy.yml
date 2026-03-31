@@ -46,7 +46,7 @@ jobs:
       - name: Build React app
         working-directory: frontend
         env:
-          REACT_APP_API_URL: https://viji-marimony-new.onrender.com/api
+          REACT_APP_API_URL: https://viji-marimony-deploy-backend.onrender.com/api
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
