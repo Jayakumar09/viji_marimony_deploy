@@ -6,14 +6,6 @@
  * - Full Profile: /api/shared-profile/:userId
  * - Sanitized: /api/shared-profile/:userId?sanitize=true
  * - Page Info: /api/shared-profile/:userId/pages (GET)
- * 
- * Watermark: Tile pattern with parameters from working profile_app:
- * - Text: VIJAYALAKSHMI BOYAR MATRIMONY
- * - Font Size: 24px (scaled to 24 * 0.7 = 16.8px effective)
- * - Opacity: 25%
- * - Scale: 0.7
- * - Rotation: -45°
- * - Pattern Spacing: 290px
  */
 
 const express = require('express');
@@ -26,49 +18,8 @@ const axios = require('axios');
 // Use Prisma for database
 const { prisma } = require('../utils/database');
 
-// Watermark parameters from working profile_app
-const WATERMARK_TEXT = 'VIJAYALAKSHMI BOYAR MATRIMONY';
-const WATERMARK_FONT_SIZE = 24;
-const WATERMARK_OPACITY = 0.25;
-const WATERMARK_SCALE = 0.7;
-const WATERMARK_ROTATION = -45;
-const WATERMARK_SPACING = 290;
-
-// Function to add TILE PATTERN watermark (from working profile_app)
-const addTilePatternWatermark = (doc, text, opacity = WATERMARK_OPACITY) => {
-    doc.save();
-    
-    const pageWidth = doc.page.width;
-    const pageHeight = doc.page.height;
-    
-    for (let y = -100; y < pageHeight + 200; y += WATERMARK_SPACING) {
-        for (let x = -100; x < pageWidth + 200; x += WATERMARK_SPACING) {
-            doc.save();
-            
-            doc.translate(x + 100, y + 50);
-            doc.scale(WATERMARK_SCALE);
-            doc.rotate(WATERMARK_ROTATION);
-            
-            doc.fontSize(WATERMARK_FONT_SIZE * WATERMARK_SCALE)
-               .font('Helvetica-Bold');
-            
-            const textWidth = doc.widthOfString(text);
-            
-            doc.fillColor('#9e9e9e')
-               .fillOpacity(opacity)
-               .text(text, 0, 0, {
-                   align: 'center',
-                   width: textWidth + 20,
-                   lineBreak: false,
-                   ellipsis: false
-               });
-            
-            doc.restore();
-        }
-    }
-    
-    doc.restore();
-};
+const WATERMARK_TEXT = 'Vijayalakshmi Boyar Matrimony';
+const WATERMARK_FONT = 'Helvetica';
 
 async function fetchImage(imagePath) {
   try {
@@ -350,7 +301,7 @@ router.get('/:userId', async (req, res) => {
     
     // Add watermark on page 1 if not sanitized
     if (!sanitize) {
-      addTilePatternWatermark(doc, WATERMARK_TEXT, WATERMARK_OPACITY);
+      doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
     }
     
     // ========== PAGE 2 ==========
@@ -378,7 +329,7 @@ router.get('/:userId', async (req, res) => {
     
     // Add watermark on page 2
     if (!sanitize) {
-      addTilePatternWatermark(doc, WATERMARK_TEXT, WATERMARK_OPACITY);
+      doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
     }
     
     // ========== GALLERY PAGES ==========
@@ -403,7 +354,7 @@ router.get('/:userId', async (req, res) => {
         
         // Add watermark
         if (!sanitize) {
-          addTilePatternWatermark(doc, WATERMARK_TEXT, WATERMARK_OPACITY);
+          doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
         }
       }
     }
@@ -424,9 +375,8 @@ router.get('/:userId', async (req, res) => {
       }
       
       // Add watermark
-      // Add watermark
       if (!sanitize) {
-        addTilePatternWatermark(doc, WATERMARK_TEXT, WATERMARK_OPACITY);
+        doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
       }
     }
     
