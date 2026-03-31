@@ -590,41 +590,11 @@ const getDashboardStats = async (req, res) => {
       }
     });
     
-    const premiumUsers = await prisma.user.count({ where: { isPremium: true } });
-    const messagesToday = await prisma.message.count({
-      where: {
-        createdAt: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0))
-        }
-      }
-    });
-    
-    // Fetch recent users for dashboard
-    const recentUsers = await prisma.user.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        customId: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        profilePhoto: true,
-        isVerified: true,
-        isPremium: true,
-        createdAt: true
-      }
-    });
-    
     res.json({
       totalUsers,
       verifiedUsers,
       pendingPhotoVerifications,
       newUsersToday,
-      premiumUsers,
-      messagesToday,
-      recentUsers,
       verificationRate: totalUsers > 0 ? Math.round((verifiedUsers / totalUsers) * 100) : 0
     });
   } catch (error) {
