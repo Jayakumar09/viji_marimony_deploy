@@ -377,10 +377,15 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
+      const adminToken = localStorage.getItem('adminToken');
+      console.log('[DEBUG fetchDashboardData] adminToken:', adminToken ? 'exists' : 'null');
       console.log('[DEBUG fetchDashboardData] Calling /admin/dashboard...');
+      
       const response = await api.get('/admin/dashboard');
       console.log('[DEBUG fetchDashboardData] Response:', response);
       console.log('[DEBUG fetchDashboardData] Response.data:', response.data);
+      console.log('[DEBUG fetchDashboardData] Response.data.totalUsers:', response.data?.totalUsers);
+      
       setStats(response.data);
       if (response.data.recentUsers) {
         setRecentUsers(response.data.recentUsers);
