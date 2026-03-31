@@ -377,13 +377,18 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
+      console.log('[DEBUG fetchDashboardData] Calling /admin/dashboard...');
       const response = await api.get('/admin/dashboard');
+      console.log('[DEBUG fetchDashboardData] Response:', response);
+      console.log('[DEBUG fetchDashboardData] Response.data:', response.data);
       setStats(response.data);
       if (response.data.recentUsers) {
         setRecentUsers(response.data.recentUsers);
       }
     } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      console.error('[DEBUG fetchDashboardData] Failed to fetch dashboard data:', error);
+      console.error('[DEBUG fetchDashboardData] Error response:', error.response);
+      console.error('[DEBUG fetchDashboardData] Error message:', error.message);
       // Don't use mock data - show error state instead
       setStats({
         totalUsers: 0,

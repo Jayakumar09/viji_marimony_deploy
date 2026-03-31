@@ -93,45 +93,59 @@ const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, det
 // Admin middleware
 const adminMiddleware = async (req, res, next) => {
   try {
+    console.log('[DEBUG adminMiddleware] Request received to:', req.originalUrl);
+    console.log('[DEBUG adminMiddleware] Authorization header:', req.header('Authorization')?.substring(0, 20) + '...');
+    
     const jwt = require('jsonwebtoken');
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
+      console.log('[DEBUG adminMiddleware] No token provided');
       return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
 
     // Verify token with correct secret
     let decoded;
     try {
+      console.log('[DEBUG adminMiddleware] Trying JWT_SECRET...');
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'boyar-matrimony-super-secret-key-change-in-production-2024');
+      console.log('[DEBUG adminMiddleware] Token decoded successfully:', decoded);
     } catch (err) {
       // Try with fallback secret
       try {
+        console.log('[DEBUG adminMiddleware] Trying fallback admin-secret-key...');
         decoded = jwt.verify(token, 'admin-secret-key');
       } catch (err2) {
+        console.log('[DEBUG adminMiddleware] Token verification failed:', err2.message);
         return res.status(401).json({ error: 'Invalid or expired token' });
       }
     }
     
     if (!decoded || (!decoded.id && !decoded.adminId)) {
+      console.log('[DEBUG adminMiddleware] Invalid token payload:', decoded);
       return res.status(401).json({ error: 'Invalid token payload' });
     }
     
     // Use either id or adminId from decoded token
     const adminId = decoded.id || decoded.adminId;
+    console.log('[DEBUG adminMiddleware] adminId:', adminId);
     
     const admin = await prisma.admin.findUnique({
       where: { id: adminId }
     });
     
+    console.log('[DEBUG adminMiddleware] Admin found:', admin ? 'yes' : 'no');
+    
     if (!admin || !admin.isActive) {
+      console.log('[DEBUG adminMiddleware] Access denied - admin:', admin, 'isActive:', admin?.isActive);
       return res.status(403).json({ error: 'Access denied' });
     }
     
     req.admin = admin;
+    console.log('[DEBUG adminMiddleware] Passing to next()');
     next();
   } catch (error) {
-    console.error('Admin middleware error:', error);
+    console.error('[DEBUG adminMiddleware] Error:', error);
     res.status(500).json({ error: 'Server error in admin authentication' });
   }
 };
@@ -577,11 +591,20 @@ const getUserDetails = async (req, res) => {
 
 const getDashboardStats = async (req, res) => {
   try {
+    console.log('[DEBUG getDashboardStats] Starting...');
+    console.log('[DEBUG getDashboardStats] DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+    
     const totalUsers = await prisma.user.count();
+    console.log('[DEBUG getDashboardStats] totalUsers:', totalUsers);
+    
     const verifiedUsers = await prisma.user.count({ where: { isVerified: true } });
+    console.log('[DEBUG getDashboardStats] verifiedUsers:', verifiedUsers);
+    
     const pendingPhotoVerifications = await prisma.photoVerification.count({ 
       where: { status: 'PENDING' } 
     });
+    console.log('[DEBUG getDashboardStats] pendingPhotoVerifications:', pendingPhotoVerifications);
+    
     const newUsersToday = await prisma.user.count({
       where: {
         createdAt: {
@@ -589,14 +612,18 @@ const getDashboardStats = async (req, res) => {
         }
       }
     });
+    console.log('[DEBUG getDashboardStats] newUsersToday:', newUsersToday);
     
-    res.json({
+    const response = {
       totalUsers,
       verifiedUsers,
       pendingPhotoVerifications,
       newUsersToday,
       verificationRate: totalUsers > 0 ? Math.round((verifiedUsers / totalUsers) * 100) : 0
-    });
+    };
+    console.log('[DEBUG getDashboardStats] Sending response:', response);
+    
+    res.json(response);
   } catch (error) {
     console.error('Get dashboard stats error:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
