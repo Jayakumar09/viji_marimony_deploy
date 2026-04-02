@@ -80,6 +80,27 @@ const logActivity = async (action, details) => {
   }
 };
 
+// Helper function to open mailto and download PDF
+const openMailtoWithPdf = async (email, profileName, pdfBlob) => {
+  const subject = encodeURIComponent(`${profileName}'s Profile - Vijayalakshmi Boyar Matrimony`);
+  const body = encodeURIComponent(`Please find attached the profile of ${profileName}.\n\nRegards,\nVijayalakshmi Boyar Matrimony\n\nNote: A PDF profile has been downloaded. Please attach it to your email.`);
+  
+  // Download the PDF
+  const url = window.URL.createObjectURL(new Blob([pdfBlob]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `${profileName.replace(/\s+/g, '_')}_Profile.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  
+  // Open mailto after a short delay
+  setTimeout(() => {
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+  }, 500);
+};
+
 const ProfileShareModal = ({ open, onClose, userId, userName }) => {
   const [shareOption, setShareOption] = useState('myself');
   const [email, setEmail] = useState('');
@@ -245,65 +266,91 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
 
   // Generate and copy shareable link
   const handleWhatsAppShare = async () => {
-    const isSanitized = shareOption === 'other';
-    
-    // Use the deployed URL - always use production URL for sharing
-    const baseUrl = 'https://vijayalakshmimarriage.com';
-    const profileLink = `${baseUrl}/profile/${userId}?sanitize=${isSanitized}`;
-    
-    // Direct PDF link that can be downloaded
-    const pdfLink = `${baseUrl}/api/shared-profile/${userId}?sanitize=${isSanitized}`;
-    
-    const name = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
-    let shareMessage = `💍 *${name}'s Profile - Vijayalakshmi Boyar Matrimony*\n\n`;
-    
-    if (profileData.age) shareMessage += `👤 Age: ${profileData.age} years\n`;
-    if (profileData.gender) shareMessage += `⚥ Gender: ${profileData.gender}\n`;
-    if (profileData.height) shareMessage += `📏 Height: ${profileData.height}\n`;
-    if (profileData.complexion) shareMessage += `🎨 Complexion: ${profileData.complexion}\n`;
-    if (profileData.community) shareMessage += `🕉️ Community: ${profileData.community}\n`;
-    if (profileData.subCaste) shareMessage += `📿 Subcaste: ${profileData.subCaste}\n`;
-    if (profileData.education) shareMessage += `🎓 Education: ${profileData.education}\n`;
-    if (profileData.profession) shareMessage += `💼 Profession: ${profileData.profession}\n`;
-    if (profileData.city || profileData.state) shareMessage += `📍 Location: ${[profileData.city, profileData.state].filter(Boolean).join(', ')}\n`;
-    if (profileData.maritalStatus) shareMessage += `💍 Marital Status: ${profileData.maritalStatus}\n`;
-    
-    shareMessage += `\n✨ *Vijayalakshmi Boyar Matrimony*\n`;
-    shareMessage += `\n🔗 View Profile: ${profileLink}\n`;
-    shareMessage += `📄 *Download PDF:* ${pdfLink}\n\n`;
-    shareMessage += `Click the PDF link above to download and share!\n\n`;
-    shareMessage += `Regards,\nVijayalakshmi Boyar Matrimony`;
-    
-    // Try native share API first (works better on mobile), fallback to WhatsApp
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${name}'s Profile`,
-          text: shareMessage,
-          url: pdfLink
-        });
-        toast.success('Shared successfully!');
-        return;
-      } catch (err) {
-        // User cancelled or error, continue to WhatsApp
-      }
+    if (!profileData) {
+      toast.error('Profile data not loaded');
+      return;
     }
     
-    // Open WhatsApp with the share message
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
-    window.open(whatsappUrl, '_blank');
+    setWhatsappLoading(true);
+    const isSanitized = shareOption === 'other';
     
-    // Log activity
-    await logActivity('SHARE_PROFILE_WHATSAPP', {
-      userId: userId,
-      userCustomId: profileData?.customId,
-      userName: profileData?.firstName,
-      shareType: shareOption,
-      recipientType: 'whatsapp',
-      timestamp: new Date().toISOString()
-    });
-    
-    toast.success('WhatsApp opened! To share PDF: Download first, then attach in WhatsApp chat.');
+    try {
+      // Download PDF first
+      let pdfBlob;
+      try {
+        pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
+      } catch (error) {
+        console.error('PDF download error:', error);
+        pdfBlob = getProfilePDFBlob(profileData, isSanitized);
+      }
+      
+      // Save PDF to user's device
+      const firstName = profileData.firstName || '';
+      const lastName = profileData.lastName || '';
+      const customId = profileData.customId;
+      let filename;
+      if (customId && customId.length > 0 && customId.length < 30) {
+        filename = `${customId}_Profile.pdf`;
+      } else {
+        const cleanName = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '');
+        filename = cleanName ? `${cleanName}_Profile.pdf` : `Profile_${userId.slice(-8).toUpperCase()}_Profile.pdf`;
+      }
+      
+      const url = window.URL.createObjectURL(new Blob([pdfBlob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      // Build WhatsApp share message
+      const baseUrl = 'https://vijayalakshmimarriage.com';
+      const profileLink = `${baseUrl}/profile/${userId}?sanitize=${isSanitized}`;
+      const name = `${firstName} ${lastName}`.trim();
+      
+      let shareMessage = `💍 *${name}'s Profile - Vijayalakshmi Boyar Matrimony*\n\n`;
+      
+      if (profileData.age) shareMessage += `👤 Age: ${profileData.age} years\n`;
+      if (profileData.gender) shareMessage += `⚥ Gender: ${profileData.gender}\n`;
+      if (profileData.height) shareMessage += `📏 Height: ${profileData.height}\n`;
+      if (profileData.complexion) shareMessage += `🎨 Complexion: ${profileData.complexion}\n`;
+      if (profileData.community) shareMessage += `🕉️ Community: ${profileData.community}\n`;
+      if (profileData.subCaste) shareMessage += `📿 Subcaste: ${profileData.subCaste}\n`;
+      if (profileData.education) shareMessage += `🎓 Education: ${profileData.education}\n`;
+      if (profileData.profession) shareMessage += `💼 Profession: ${profileData.profession}\n`;
+      if (profileData.city || profileData.state) shareMessage += `📍 Location: ${[profileData.city, profileData.state].filter(Boolean).join(', ')}\n`;
+      if (profileData.maritalStatus) shareMessage += `💍 Marital Status: ${profileData.maritalStatus}\n`;
+      
+      shareMessage += `\n✨ *Vijayalakshmi Boyar Matrimony*\n`;
+      shareMessage += `\n🔗 View Profile: ${profileLink}\n`;
+      shareMessage += `📎 PDF has been downloaded! Please attach it to your WhatsApp message.\n\n`;
+      shareMessage += `Regards,\nVijayalakshmi Boyar Matrimony`;
+      
+      // Open WhatsApp after a short delay
+      setTimeout(() => {
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
+        window.open(whatsappUrl, '_blank');
+      }, 500);
+      
+      // Log activity
+      await logActivity('SHARE_PROFILE_WHATSAPP', {
+        userId: userId,
+        userCustomId: profileData?.customId,
+        userName: profileData?.firstName,
+        shareType: shareOption,
+        recipientType: 'whatsapp',
+        timestamp: new Date().toISOString()
+      });
+      
+      toast.success('PDF downloaded! WhatsApp opened to send.');
+    } catch (error) {
+      console.error('WhatsApp share error:', error);
+      toast.error('Failed to share. Please try downloading the PDF manually.');
+    } finally {
+      setWhatsappLoading(false);
+    }
   };
 
   const handleEmailShare = async () => {
@@ -323,57 +370,63 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
     }
 
     setEmailLoading(true);
+    
+    const firstName = profileData.firstName || '';
+    const lastName = profileData.lastName || '';
+    const customId = profileData.customId;
+    let profileName;
+    if (customId && customId.length > 0 && customId.length < 30) {
+      profileName = customId;
+    } else {
+      profileName = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '') || 'Profile';
+    }
+    
     try {
-      let pdfBlob;
-      try {
-        const isSanitized = shareOption === 'other';
-        pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
-      } catch (backendError) {
-        const isSanitized = shareOption === 'other';
-        pdfBlob = getProfilePDFBlob(profileData, isSanitized);
-      }
-      
-      const firstName = profileData.firstName || '';
-      const lastName = profileData.lastName || '';
-      const customId = profileData.customId;
-      let name;
-      if (customId && customId.length > 0 && customId.length < 30) {
-        name = customId;
-      } else {
-        name = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '') || 'Profile';
-      }
+      const isSanitized = shareOption === 'other';
+      const pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
       
       const formData = new FormData();
-      formData.append('pdf', pdfBlob, `${name.replace(/\s+/g, '_')}_Profile.pdf`);
+      formData.append('pdf', pdfBlob, `${profileName.replace(/\s+/g, '_')}_Profile.pdf`);
       formData.append('email', email);
-      formData.append('profileName', name);
+      formData.append('profileName', profileName);
       formData.append('shareType', shareOption);
 
+      // Use short timeout for email API - if it takes too long, use mailto fallback
       const response = await api.post('/admin/share-profile-email', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 10000 // 10 second timeout
       });
       
-      if (response.data?.fallback) {
-        const subject = encodeURIComponent(`${userName}'s Profile - Vijayalakshmi Boyar Matrimony`);
-        const body = encodeURIComponent(`Please find attached the profile of ${userName}.\n\nRegards,\nVijayalakshmi Boyar Matrimony`);
-        window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+      if (response.data?.fallback || response.data?.success) {
+        await openMailtoWithPdf(email, profileName, pdfBlob);
         
+        await logActivity('SHARE_PROFILE_EMAIL', {
+          userId: userId,
+          userCustomId: profileData?.customId,
+          userName: profileData?.firstName,
+          shareType: shareOption,
+          recipientEmail: email,
+          method: 'mailto_with_pdf',
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      setEmail('');
+      toast.success(`Email ready! Please send from your email client.`);
+    } catch (error) {
+      console.error('Email share error:', error);
+      
+      // Fallback: Download PDF and open mailto
+      try {
+        const isSanitized = shareOption === 'other';
+        let pdfBlob;
         try {
-          const isSanitized = shareOption === 'other';
-          const pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
-          const url = window.URL.createObjectURL(new Blob([pdfBlob]));
-          const link = document.createElement('a');
-          link.href = url;
-          link.setAttribute('download', `${name.replace(/\s+/g, '_')}_Profile.pdf`);
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          window.URL.revokeObjectURL(url);
-        } catch (downloadError) {
-          downloadProfilePDF(profileData, shareOption === 'other');
+          pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
+        } catch {
+          pdfBlob = getProfilePDFBlob(profileData, isSanitized);
         }
         
-        toast('Email client opened. Please attach the downloaded PDF.', { icon: '📧' });
+        await openMailtoWithPdf(email, profileName, pdfBlob);
         
         await logActivity('SHARE_PROFILE_EMAIL', {
           userId: userId,
@@ -384,61 +437,15 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
           method: 'mailto_fallback',
           timestamp: new Date().toISOString()
         });
-      } else {
-        toast.success(`Profile sent to ${email}`);
         
-        await logActivity('SHARE_PROFILE_EMAIL', {
-          userId: userId,
-          userCustomId: profileData?.customId,
-          userName: profileData?.firstName,
-          shareType: shareOption,
-          recipientEmail: email,
-          timestamp: new Date().toISOString()
-        });
-      }
-      setEmail('');
-    } catch (error) {
-      console.error('Email share error:', error);
-      
-      const firstName = profileData?.firstName || '';
-      const lastName = profileData?.lastName || '';
-      const customId = profileData?.customId;
-      let fallbackName;
-      if (customId && customId.length > 0 && customId.length < 30) {
-        fallbackName = customId;
-      } else {
-        fallbackName = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '') || 'Profile';
-      }
-      
-      const subject = encodeURIComponent(`${userName}'s Profile - Vijayalakshmi Boyar Matrimony`);
-      const body = encodeURIComponent(`Please find attached the profile of ${userName}.\n\nRegards,\nVijayalakshmi Boyar Matrimony`);
-      window.open(`mailto:${email}?subject=${subject}&body=${body}`);
-      toast('PDF downloaded. Please attach it to your email.', { icon: '📧' });
-      
-      await logActivity('SHARE_PROFILE_EMAIL', {
-        userId: userId,
-        userCustomId: profileData?.customId,
-        userName: profileData?.firstName,
-        shareType: shareOption,
-        recipientEmail: email,
-        method: 'mailto_error_fallback',
-        timestamp: new Date().toISOString()
-      });
-      
-      try {
-        const isSanitized = shareOption === 'other';
-        const pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
-        const url = window.URL.createObjectURL(new Blob([pdfBlob]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${fallbackName.replace(/\s+/g, '_')}_Profile.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
+        toast.success(`Email ready! Please send from your email client.`);
       } catch (downloadError) {
+        console.error('PDF download error:', downloadError);
         downloadProfilePDF(profileData, shareOption === 'other');
+        toast.error('Email service unavailable. PDF downloaded - please attach manually.');
       }
+      
+      setEmail('');
     } finally {
       setEmailLoading(false);
     }
@@ -672,15 +679,8 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                   fullWidth
                   variant="contained"
                   startIcon={whatsappLoading ? <CircularProgress size={20} /> : <WhatsApp />}
-                  onClick={async () => {
-                    setWhatsappLoading(true);
-                    await handleDownloadPDF();
-                    setTimeout(() => {
-                      handleWhatsAppShare();
-                      setWhatsappLoading(false);
-                    }, 1000);
-                  }}
-                  disabled={whatsappLoading || downloadLoading}
+                  onClick={handleWhatsAppShare}
+                  disabled={whatsappLoading || !profileData}
                   sx={{
                     py: 1.5,
                     borderRadius: 2,
@@ -703,7 +703,7 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                   variant="outlined"
                   startIcon={downloadLoading ? <CircularProgress size={20} /> : <PictureAsPdf />}
                   onClick={handleDownloadPDF}
-                  disabled={downloadLoading || whatsappLoading}
+                  disabled={downloadLoading || !profileData}
                   sx={{
                     py: 1.5,
                     borderRadius: 2,
@@ -722,8 +722,8 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                   fullWidth
                   variant="outlined"
                   startIcon={emailLoading ? <CircularProgress size={20} /> : <Email />}
-                  onClick={() => document.getElementById('email-input')?.focus()}
-                  disabled={emailLoading || loading}
+                  onClick={handleEmailShare}
+                  disabled={emailLoading || !profileData}
                   sx={{
                     py: 1.5,
                     borderRadius: 2,
