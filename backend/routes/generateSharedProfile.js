@@ -381,18 +381,25 @@ router.get('/:userId', async (req, res) => {
     const { userId } = req.params;
     const sanitize = req.query.sanitize === 'true';
     
+    // Debug log
+    console.log('Generating PDF for userId:', userId, 'sanitize:', sanitize);
+    
     // Fetch user profile using Prisma
     const user = await prisma.user.findUnique({
       where: { id: userId }
     });
 
     if (!user) {
+      console.log('User not found:', userId);
       return res.status(404).json({ error: 'Profile not found' });
     }
 
     if (!user.isActive) {
+      console.log('User not active:', userId);
       return res.status(404).json({ error: 'Profile not available' });
     }
+
+    console.log('User found:', user.firstName, user.lastName);
 
     // Get profile photo and gallery
     let profilePhotoUrl = user.profilePhoto;
@@ -405,7 +412,9 @@ router.get('/:userId', async (req, res) => {
             p && typeof p === 'string' && (p.includes('cloudinary') || p.startsWith('/') || p.startsWith('uploads'))
           );
         }
-      } catch {}
+      } catch (err) {
+        console.log('Error parsing photos:', err.message);
+      }
     }
 
     // Get documents
@@ -414,7 +423,9 @@ router.get('/:userId', async (req, res) => {
       docs = await prisma.userDocument.findMany({
         where: { userId: userId }
       });
-    } catch {}
+    } catch (err) {
+      console.log('Error fetching documents:', err.message);
+    }
     
     // Prepare filename
     const customId = user.customId || '';
@@ -441,7 +452,16 @@ router.get('/:userId', async (req, res) => {
     // ========== PAGE 1 ==========
     y = addProfessionalHeader(doc, user, displayId, sanitize);
     
+    // Add spacing after header
+    y += 20;
+    
     // ========== PERSONAL INFORMATION SECTION ==========
+    // Check if we need a new page
+    if (y > 600) {
+      doc.addPage();
+      y = 40;
+    }
+    
     y = addSection(doc, 'Personal Information', y);
     
     y = addField(doc, 'Full Name:', `${user.firstName || ''} ${user.lastName || ''}`.trim(), 20, y);
@@ -457,6 +477,12 @@ router.get('/:userId', async (req, res) => {
     y = addField(doc, 'Weight:', user.weight ? `${user.weight} kg` : 'Not provided', 20, y);
     y = addField(doc, 'Complexion:', user.complexion || 'Not provided', 20, y);
     
+    // Check if we need a new page for next section
+    if (y > 600) {
+      doc.addPage();
+      y = 40;
+    }
+    
     // ========== CONTACT INFORMATION SECTION ==========
     y = addSection(doc, 'Contact Information', y);
     
@@ -470,6 +496,12 @@ router.get('/:userId', async (req, res) => {
     y = addField(doc, 'City:', user.city || 'Not provided', 20, y);
     y = addField(doc, 'State:', user.state || 'Not provided', 20, y);
     y = addField(doc, 'Country:', user.country || 'India', 20, y);
+    
+    // Check if we need a new page for family section
+    if (y > 650) {
+      doc.addPage();
+      y = 40;
+    }
     
     // ========== FAMILY DETAILS SECTION ==========
     y = addSection(doc, 'Family Details', y);
@@ -525,12 +557,14 @@ router.get('/:userId', async (req, res) => {
     if (user.aboutMe || user.bio) {
       y = addSection(doc, 'About Me', y);
       
+      const aboutText = user.aboutMe || user.bio;
       doc.fontSize(9);
       doc.fillColor(TEXT_COLOR);
-      doc.text(user.aboutMe || user.bio, 20, y, {
+      const aboutY = doc.text(aboutText, 20, y, {
         width: doc.internal.pageSize.getWidth() - 40,
         align: 'justify'
       });
+      y = aboutY + 15;
     }
     
     // Add watermark on page 2
@@ -540,7 +574,9 @@ router.get('/:userId', async (req, res) => {
     
     // ========== GALLERY PAGES ==========
     if (gallery.length > 0) {
-      y = await addGalleryPage(doc, gallery, 20);
+      doc.addPage();
+      y = 20;
+      y = await addGalleryPage(doc, gallery, y);
     }
     
     // ========== DOCUMENTS PAGE ==========
