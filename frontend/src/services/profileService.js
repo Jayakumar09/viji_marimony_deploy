@@ -114,19 +114,34 @@ export const profileService = {
     };
   },
 
-  // Download profile PDF (uses shared profile API with watermark)
   downloadProfilePdf: async (userId, sanitize = false) => {
-    const response = await api.get(`/shared-profile/${userId}`, {
-      responseType: 'blob',
-      params: { sanitize }
-    });
-    return response.data;
+    try {
+      const response = await api.get(`/shared-profile/${userId}`, {
+        responseType: 'blob',
+        params: { sanitize }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      throw error;
+    }
   },
 
-  // Get page count info for shared profile PDF
   getPageCount: async (userId) => {
-    const response = await api.get(`/shared-profile/${userId}/pages`);
-    return response.data;
+    try {
+      const response = await api.get(`/shared-profile/${userId}/pages`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting page count:', error);
+      return {
+        totalPages: 1,
+        profilePages: 1,
+        galleryCount: 0,
+        galleryPages: 0,
+        documentCount: 0,
+        documentPages: 0
+      };
+    }
   }
 };
 

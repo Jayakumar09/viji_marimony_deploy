@@ -84,6 +84,9 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
   const [shareOption, setShareOption] = useState('myself');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [profileData, setProfileData] = useState(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [sanitizedPreview, setSanitizedPreview] = useState(null);
@@ -195,21 +198,27 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       return;
     }
 
-    setLoading(true);
+    setDownloadLoading(true);
     try {
-      // Use backend PDF generation for better quality
       const isSanitized = shareOption === 'other';
       const pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
       
-      // DEBUG: Log what's being used for filename
-      console.log('PDF download - customId:', profileData?.customId, 'firstName:', profileData?.firstName);
+      const firstName = profileData.firstName || '';
+      const lastName = profileData.lastName || '';
+      const customId = profileData.customId;
       
-      // Create download link
+      let filename;
+      if (customId && customId.length > 0 && customId.length < 30) {
+        filename = `${customId}_Profile.pdf`;
+      } else {
+        const cleanName = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '');
+        filename = cleanName ? `${cleanName}_Profile.pdf` : `Profile_${userId.slice(-8).toUpperCase()}_Profile.pdf`;
+      }
+      
       const url = window.URL.createObjectURL(new Blob([pdfBlob]));
       const link = document.createElement('a');
-      const name = profileData.customId || `${profileData.firstName || 'Profile'}_${profileData.lastName || ''}`.trim();
       link.href = url;
-      link.setAttribute('download', `${name.replace(/\s+/g, '_')}_Profile.pdf`);
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -218,14 +227,12 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       toast.success('PDF downloaded successfully!');
     } catch (error) {
       console.error('PDF download error:', error);
-      // Fallback to frontend PDF generation
       const isSanitized = shareOption === 'other';
       downloadProfilePDF(profileData, isSanitized);
       toast.success('PDF downloaded successfully!');
     } finally {
-      setLoading(false);
+      setDownloadLoading(false);
       
-      // Log activity - runs regardless of success or fallback
       await logActivity('DOWNLOAD_PROFILE_PDF', {
         userId: userId,
         userCustomId: profileData?.customId,
@@ -241,7 +248,7 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
     const isSanitized = shareOption === 'other';
     
     // Use the deployed URL - always use production URL for sharing
-    const baseUrl = 'https://vijayalakshmiboyarmatrimony.com';
+    const baseUrl = 'https://vijayalakshmimarriage.com';
     const profileLink = `${baseUrl}/profile/${userId}?sanitize=${isSanitized}`;
     
     // Direct PDF link that can be downloaded
@@ -315,41 +322,42 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       return;
     }
 
-    setLoading(true);
+    setEmailLoading(true);
     try {
-      // Try backend PDF first
       let pdfBlob;
       try {
         const isSanitized = shareOption === 'other';
         pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
       } catch (backendError) {
-        // Fallback to frontend PDF
         const isSanitized = shareOption === 'other';
         pdfBlob = getProfilePDFBlob(profileData, isSanitized);
       }
       
-      const name = profileData.customId || `${profileData.firstName || 'Profile'}_${profileData.lastName || ''}`.trim();
+      const firstName = profileData.firstName || '';
+      const lastName = profileData.lastName || '';
+      const customId = profileData.customId;
+      let name;
+      if (customId && customId.length > 0 && customId.length < 30) {
+        name = customId;
+      } else {
+        name = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '') || 'Profile';
+      }
       
-      // Create form data for email
       const formData = new FormData();
       formData.append('pdf', pdfBlob, `${name.replace(/\s+/g, '_')}_Profile.pdf`);
       formData.append('email', email);
       formData.append('profileName', name);
       formData.append('shareType', shareOption);
 
-      // Send email via backend
       const response = await api.post('/admin/share-profile-email', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      // Check if backend returned fallback (SMTP not configured)
       if (response.data?.fallback) {
-        // Use mailto link as fallback
         const subject = encodeURIComponent(`${userName}'s Profile - Vijayalakshmi Boyar Matrimony`);
         const body = encodeURIComponent(`Please find attached the profile of ${userName}.\n\nRegards,\nVijayalakshmi Boyar Matrimony`);
         window.open(`mailto:${email}?subject=${subject}&body=${body}`);
         
-        // Also download PDF for user to attach
         try {
           const isSanitized = shareOption === 'other';
           const pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
@@ -367,7 +375,6 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         
         toast('Email client opened. Please attach the downloaded PDF.', { icon: '📧' });
         
-        // Log activity (fallback - email client opened)
         await logActivity('SHARE_PROFILE_EMAIL', {
           userId: userId,
           userCustomId: profileData?.customId,
@@ -380,7 +387,6 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       } else {
         toast.success(`Profile sent to ${email}`);
         
-        // Log activity
         await logActivity('SHARE_PROFILE_EMAIL', {
           userId: userId,
           userCustomId: profileData?.customId,
@@ -393,13 +399,22 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       setEmail('');
     } catch (error) {
       console.error('Email share error:', error);
-      // Fallback: Open email client
+      
+      const firstName = profileData?.firstName || '';
+      const lastName = profileData?.lastName || '';
+      const customId = profileData?.customId;
+      let fallbackName;
+      if (customId && customId.length > 0 && customId.length < 30) {
+        fallbackName = customId;
+      } else {
+        fallbackName = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '') || 'Profile';
+      }
+      
       const subject = encodeURIComponent(`${userName}'s Profile - Vijayalakshmi Boyar Matrimony`);
       const body = encodeURIComponent(`Please find attached the profile of ${userName}.\n\nRegards,\nVijayalakshmi Boyar Matrimony`);
       window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       toast('PDF downloaded. Please attach it to your email.', { icon: '📧' });
       
-      // Log activity (fallback - error case)
       await logActivity('SHARE_PROFILE_EMAIL', {
         userId: userId,
         userCustomId: profileData?.customId,
@@ -410,14 +425,13 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         timestamp: new Date().toISOString()
       });
       
-      // Download PDF as fallback
       try {
         const isSanitized = shareOption === 'other';
         const pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
         const url = window.URL.createObjectURL(new Blob([pdfBlob]));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `${name.replace(/\s+/g, '_')}_Profile.pdf`);
+        link.setAttribute('download', `${fallbackName.replace(/\s+/g, '_')}_Profile.pdf`);
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -426,7 +440,7 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         downloadProfilePDF(profileData, shareOption === 'other');
       }
     } finally {
-      setLoading(false);
+      setEmailLoading(false);
     }
   };
 
@@ -657,16 +671,16 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                 <Button
                   fullWidth
                   variant="contained"
-                  startIcon={loading ? <CircularProgress size={20} /> : <WhatsApp />}
+                  startIcon={whatsappLoading ? <CircularProgress size={20} /> : <WhatsApp />}
                   onClick={async () => {
-                    // First download the PDF
+                    setWhatsappLoading(true);
                     await handleDownloadPDF();
-                    // Wait a moment then open WhatsApp
                     setTimeout(() => {
                       handleWhatsAppShare();
+                      setWhatsappLoading(false);
                     }, 1000);
                   }}
-                  disabled={loading}
+                  disabled={whatsappLoading || downloadLoading}
                   sx={{
                     py: 1.5,
                     borderRadius: 2,
@@ -687,9 +701,9 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={loading ? <CircularProgress size={20} /> : <PictureAsPdf />}
+                  startIcon={downloadLoading ? <CircularProgress size={20} /> : <PictureAsPdf />}
                   onClick={handleDownloadPDF}
-                  disabled={loading}
+                  disabled={downloadLoading || whatsappLoading}
                   sx={{
                     py: 1.5,
                     borderRadius: 2,
@@ -707,9 +721,9 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={loading ? <CircularProgress size={20} /> : <Email />}
+                  startIcon={emailLoading ? <CircularProgress size={20} /> : <Email />}
                   onClick={() => document.getElementById('email-input')?.focus()}
-                  disabled={loading}
+                  disabled={emailLoading || loading}
                   sx={{
                     py: 1.5,
                     borderRadius: 2,

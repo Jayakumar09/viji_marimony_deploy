@@ -1,7 +1,6 @@
 /**
- * Generate Shared Profile PDF Route
- * Uses Prisma (PostgreSQL) for production database
- * Professional PDF Layout based on successful implementation
+ * Generate Shared Profile PDF
+ * Uses Prisma to fetch from PostgreSQL database
  * 
  * Web Link Format:
  * - Full Profile: /api/shared-profile/:userId
@@ -12,63 +11,46 @@
 const express = require('express');
 const router = express.Router();
 const PDFDocument = require('pdfkit');
-const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-
-// Use Prisma for database
 const { prisma } = require('../utils/database');
 
 const WATERMARK_TEXT = 'Vijayalakshmi Boyar Matrimony';
 
-// Color constants
-const PRIMARY_COLOR = '#8B5CF6';
-const SECONDARY_COLOR = '#6B7280';
-const TEXT_COLOR = '#1F2937';
-
 async function fetchImage(imagePath) {
   try {
-    if (!imagePath || imagePath === 'null') return null;
+    if (!imagePath || imagePath === 'null' || imagePath === 'undefined') return null;
     
-    // If it's a Cloudinary URL, use optimized transformation for PDF (A4, under 500KB)
     if (imagePath.includes('cloudinary')) {
-      // Extract public ID from Cloudinary URL
       const publicId = extractCloudinaryPublicId(imagePath);
       if (publicId) {
-        // A4 optimized URL: 2480x3508, quality 60, JPG
         const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'do6o1xqs1';
-        const optimizedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/c_pad,w_2480,h_3508,b_white,q_60,f_jpg/${publicId}.jpg`;
+        const optimizedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/c_pad,w_500,h_500,b_white,q_70,f_jpg/${publicId}.jpg`;
         const response = await axios.get(optimizedUrl, { 
           responseType: 'arraybuffer',
-          maxContentLength: 600 * 1024 // 600KB max
+          maxContentLength: 600 * 1024,
+          timeout: 10000
         });
         return Buffer.from(response.data);
       }
     }
     
-    // If it's a regular HTTP URL, try to fetch it
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
       const response = await axios.get(imagePath, { 
         responseType: 'arraybuffer',
-        maxContentLength: 600 * 1024
+        maxContentLength: 600 * 1024,
+        timeout: 10000
       });
       return Buffer.from(response.data);
     }
     
-    // Otherwise, try local file
-    let filename = imagePath.split('/').pop().split('\\').pop();
-    const paths = [
-      path.join(__dirname, '..', 'uploads', filename),
-      path.join(__dirname, '..', 'uploads', 'user_' + filename)
-    ];
-    for (const fullPath of paths) {
-      if (fs.existsSync(fullPath)) return fs.readFileSync(fullPath);
-    }
     return null;
-  } catch { return null; }
+  } catch (e) {
+    console.log('Error loading image:', e.message);
+    return null;
+  }
 }
 
-// Extract public ID from Cloudinary URL
 function extractCloudinaryPublicId(cloudinaryUrl) {
   try {
     const parts = cloudinaryUrl.split('/');
@@ -90,234 +72,55 @@ function formatDate(dateString) {
   return new Date(dateString).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-/**
- * Add diagonal watermark across all pages
- */
-function addWatermark(doc) {
-  const pageCount = doc.internal.getNumberOfPages();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const pageWidth = doc.internal.pageSize.getWidth();
+function addSectionHeader(doc, title, y) {
+  doc.fontSize(12).fillColor('#8B5CF6').text(title, 40, y);
+  return y + 14;
+}
+
+function addHeader(doc, subtitle = '') {
+  doc.fillColor('#8B5CF6').rect(0, 0, doc.page.width, 40).fill();
+  doc.fillColor('#FFFFFF').fontSize(16).text(WATERMARK_TEXT, 0, 12, { align: 'center', width: doc.page.width });
+  if (subtitle) {
+    doc.fontSize(9).text(subtitle, 0, 28, { align: 'center', width: doc.page.width });
+  }
+  return 48;
+}
+
+function addField(doc, label, value, x, y, w = 120) {
+  if (!value || value === 'Not provided') return y;
+  doc.fontSize(9).fillColor('#64748b').text(label, x, y, { width: w });
+  doc.fillColor('#1e293b').text(String(value), x + w, y, { width: 230 });
+  return y + 16;
+}
+
+function addWatermark(doc, text = WATERMARK_TEXT, opacity = 0.20) {
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
   
-  for (let i = 1; i <= pageCount; i++) {
-    doc.saveGraphicsState();
-    doc.setGState(new doc.GState({ opacity: 0.08 }));
-    doc.setTextColor(139, 92, 246);
-    doc.fontSize(30);
-    
-    // Diagonal watermark pattern
-    const spacing = 80;
-    const numWatermarks = Math.ceil(pageHeight / spacing) + 2;
-    
-    for (let j = 0; j < numWatermarks; j++) {
-      const x = -100 + (j * spacing);
-      const y = pageHeight - (j * spacing * 0.8);
+  doc.save();
+  
+  const fontSize = 25;
+  const angle = -45;
+  const spacingX = 300;
+  const spacingY = 300;
+  
+  doc.fillColor('#8B5CF6').opacity(opacity).font('Helvetica').fontSize(fontSize);
+  
+  for (let row = -2; row < 12; row++) {
+    const yOffset = row * spacingY;
+    for (let col = -2; col < 8; col++) {
+      const xOffset = col * spacingX + (row % 2) * (spacingX / 2);
       
-      if (y > -50 && y < pageHeight + 50) {
-        doc.text(WATERMARK_TEXT, x, y, {
-          lineBreak: false
-        });
-      }
-    }
-    
-    doc.restoreGraphicsState();
-  }
-}
-
-/**
- * Add professional header with profile info
- */
-function addProfessionalHeader(doc, user, displayId, isSanitized) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  
-  // Header background - Purple gradient effect
-  doc.fillColor(PRIMARY_COLOR);
-  doc.rect(0, 0, pageWidth, 70).fill();
-  
-  // Title
-  doc.fillColor('#FFFFFF');
-  doc.fontSize(20);
-  doc.font('Helvetica-Bold');
-  doc.text('Profile Details', 20, 15);
-  
-  // Subtitle
-  doc.fontSize(10);
-  doc.font('Helvetica');
-  doc.text('Vijayalakshmi Boyar Matrimony', 20, 32);
-  
-  // Profile Name on right
-  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim().toUpperCase();
-  doc.fontSize(16);
-  doc.font('Helvetica-Bold');
-  doc.text(fullName, pageWidth - 20, 15, { align: 'right', width: 150 });
-  
-  // Profile ID
-  doc.fontSize(10);
-  doc.font('Helvetica');
-  doc.text(`ID: ${displayId}`, pageWidth - 20, 32, { align: 'right', width: 150 });
-  
-  // Verification badge
-  if (user.isVerified) {
-    doc.fillColor('#10B981'); // Green
-    doc.text('✓ Verified', pageWidth - 20, 44, { align: 'right', width: 150 });
-  }
-  
-  // Subscription tier
-  const tier = user.subscriptionTier || 'FREE';
-  if (tier !== 'FREE') {
-    doc.fillColor('#F59E0B'); // Amber
-    const tierLabel = tier === 'PREMIUM' ? '★ Premium' : tier === 'PRO' ? '★ Pro' : `★ ${tier}`;
-    doc.text(tierLabel, pageWidth - 20, isSanitized ? 44 : 56, { align: 'right', width: 150 });
-  }
-  
-  // Profile Photo placeholder on right
-  const photoX = pageWidth - 65;
-  const photoY = 75;
-  const photoSize = 55;
-  
-  // White background for photo
-  doc.fillColor('#FFFFFF');
-  doc.roundedRect(photoX, photoY, photoSize, photoSize, 3, 3).fill();
-  doc.strokeColor('#E5E7EB');
-  doc.lineWidth(1);
-  doc.roundedRect(photoX, photoY, photoSize, photoSize, 3, 3).stroke();
-  
-  // Person silhouette
-  doc.fillColor('#D1D5DB');
-  doc.circle(photoX + photoSize/2, photoY + 18, 8, 'F'); // Head
-  doc.circle(photoX + photoSize/2, photoY + 35, 12, 'F'); // Body
-  
-  // Photo label
-  doc.fillColor('#9CA3AF');
-  doc.fontSize(6);
-  doc.text('Photo', photoX + photoSize/2, photoY + photoSize - 5, { align: 'center' });
-  
-  return 140; // Return next Y position
-}
-
-/**
- * Add a section with title bar
- */
-function addSection(doc, title, startY) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  
-  // Section title bar
-  doc.fillColor(PRIMARY_COLOR);
-  doc.roundedRect(15, startY, pageWidth - 30, 8, 2, 2).fill();
-  
-  doc.fillColor('#FFFFFF');
-  doc.fontSize(10);
-  doc.font('Helvetica-Bold');
-  doc.text(title, 20, startY + 2);
-  
-  return startY + 15;
-}
-
-/**
- * Add field with label and value
- */
-function addField(doc, label, value, x, y) {
-  doc.fontSize(9);
-  doc.fillColor(SECONDARY_COLOR);
-  doc.font('Helvetica-Bold');
-  doc.text(label, x, y);
-  
-  doc.fillColor(TEXT_COLOR);
-  doc.font('Helvetica');
-  doc.text(String(value || 'N/A'), x + 60, y);
-  
-  return y + 12;
-}
-
-/**
- * Add footer
- */
-function addFooter(doc) {
-  const pageCount = doc.internal.getNumberOfPages();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    
-    // Footer line
-    doc.strokeColor(PRIMARY_COLOR);
-    doc.lineWidth(0.5);
-    doc.line(15, pageHeight - 20, pageWidth - 15, pageHeight - 20);
-    
-    // Footer text
-    doc.fillColor('#9CA3AF');
-    doc.fontSize(8);
-    doc.font('Helvetica');
-    doc.text('Generated by Vijayalakshmi Boyar Matrimony', 15, pageHeight - 14);
-    
-    // Page number
-    doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 14, { align: 'center' });
-    
-    // Timestamp
-    const timestamp = new Date().toLocaleString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    doc.text(timestamp, pageWidth - 15, pageHeight - 14, { align: 'right' });
-  }
-}
-
-/**
- * Add gallery page with grid layout
- */
-async function addGalleryPage(doc, gallery, startY) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  
-  // Add section header
-  const sectionY = addSection(doc, 'Photo Gallery', startY);
-  
-  const galleryY = sectionY + 10;
-  const cols = 2;
-  const photoWidth = (pageWidth - 60) / cols;
-  const photoHeight = 100;
-  const gap = 10;
-  
-  for (let i = 0; i < gallery.length; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    
-    const x = 20 + (col * (photoWidth + gap));
-    const y = galleryY + (row * (photoHeight + gap));
-    
-    // Check if we need a new page
-    if (y + photoHeight > pageHeight - 40) {
-      doc.addPage();
-      const newSectionY = addSection(doc, 'Photo Gallery (Continued)', 20);
-      return newSectionY + photoHeight + 20;
-    }
-    
-    // Photo background
-    doc.fillColor('#F3F4F6');
-    doc.roundedRect(x, y, photoWidth, photoHeight, 3, 3).fill();
-    doc.strokeColor('#E5E7EB');
-    doc.roundedRect(x, y, photoWidth, photoHeight, 3, 3).stroke();
-    
-    // Try to load image
-    const imgBuf = await fetchImage(gallery[i]);
-    if (imgBuf) {
-      try {
-        doc.image(imgBuf, x, y, { width: photoWidth, height: photoHeight, fit: [photoWidth, photoHeight] });
-      } catch (e) {
-        // Keep placeholder
-        doc.fillColor('#D1D5DB');
-        doc.text(`Photo ${i + 1}`, x + photoWidth/2, y + photoHeight/2, { align: 'center' });
-      }
-    } else {
-      doc.fillColor('#D1D5DB');
-      doc.text(`Photo ${i + 1}`, x + photoWidth/2, y + photoHeight/2, { align: 'center' });
+      doc.save();
+      doc.translate(xOffset, yOffset);
+      doc.rotate(angle);
+      doc.text(text, 0, 0, { align: 'center', lineBreak: false, width: 350 });
+      doc.restore();
     }
   }
   
-  return galleryY + (Math.ceil(gallery.length / cols) * (photoHeight + gap)) + 10;
+  doc.restore();
+  doc.opacity(1);
 }
 
 /**
@@ -335,277 +138,350 @@ router.get('/:userId/pages', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'Profile not found' });
     }
-
+    
     if (!user.isActive) {
       return res.status(404).json({ error: 'Profile not available' });
     }
-
-    // Get gallery count
+    
     let galleryCount = 0;
     if (user.photos) {
       try {
-        const parsedPhotos = JSON.parse(user.photos);
-        if (Array.isArray(parsedPhotos) && parsedPhotos.length > 0) {
-          galleryCount = parsedPhotos.filter(p =>
-            p && typeof p === 'string' && (p.includes('cloudinary') || p.startsWith('/') || p.startsWith('uploads'))
-          ).length;
+        const photos = JSON.parse(user.photos);
+        if (Array.isArray(photos)) {
+          galleryCount = photos.filter(p => p && typeof p === 'string').length;
         }
       } catch {}
     }
     
-    // Estimate pages needed
-    let estimatedPages = 2; // Base pages
-    if (galleryCount > 0) {
-      estimatedPages += Math.ceil(galleryCount / 2); // 2 photos per page
-    }
+    const docsCount = 
+      await prisma.userDocument.count({ where: { userId: userId } }) +
+      await prisma.document.count({ where: { userId: userId } });
     
-    return res.json({
-      success: true,
-      pages: estimatedPages,
-      profilePhoto: !!user.profilePhoto,
-      galleryCount
+    const profilePages = 1;
+    const galleryPages = galleryCount;
+    const documentPages = docsCount;
+    const totalPages = profilePages + galleryPages + documentPages;
+    
+    res.json({
+      userId: userId,
+      userName: `${user.firstName} ${user.lastName}`.trim(),
+      profilePages: profilePages,
+      galleryCount: galleryCount,
+      galleryPages: galleryPages,
+      documentCount: docsCount,
+      documentPages: documentPages,
+      totalPages: totalPages
     });
     
   } catch (error) {
-    console.error('Error getting page count:', error);
-    return res.status(500).json({ error: 'Failed to get page count' });
+    console.error('Page count error:', error);
+    res.status(500).json({ error: 'Failed to get page count' });
   }
 });
 
 /**
  * GET /api/shared-profile/:userId
  * Generate and download shared profile PDF with watermark
+ * Layout matches sample: Two-page format
  */
 router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const sanitize = req.query.sanitize === 'true';
     
-    // Debug log
-    console.log('Generating PDF for userId:', userId, 'sanitize:', sanitize);
-    
-    // Fetch user profile using Prisma
     const user = await prisma.user.findUnique({
       where: { id: userId }
     });
-
+    
     if (!user) {
-      console.log('User not found:', userId);
       return res.status(404).json({ error: 'Profile not found' });
     }
-
+    
     if (!user.isActive) {
-      console.log('User not active:', userId);
       return res.status(404).json({ error: 'Profile not available' });
     }
-
-    console.log('User found:', user.firstName, user.lastName);
-
-    // Get profile photo and gallery
+    
     let profilePhotoUrl = user.profilePhoto;
     let gallery = [];
     if (user.photos) {
       try {
         const parsedPhotos = JSON.parse(user.photos);
-        if (Array.isArray(parsedPhotos) && parsedPhotos.length > 0) {
-          gallery = parsedPhotos.filter(p =>
-            p && typeof p === 'string' && (p.includes('cloudinary') || p.startsWith('/') || p.startsWith('uploads'))
-          );
+        if (Array.isArray(parsedPhotos)) {
+          gallery = parsedPhotos.filter(p => p && typeof p === 'string');
         }
-      } catch (err) {
-        console.log('Error parsing photos:', err.message);
-      }
-    }
-
-    // Get documents
-    let docs = [];
-    try {
-      docs = await prisma.userDocument.findMany({
-        where: { userId: userId }
-      });
-    } catch (err) {
-      console.log('Error fetching documents:', err.message);
+      } catch {}
     }
     
-    // Prepare filename
-    const customId = user.customId || '';
-    const fullName = `${user.firstName}${user.lastName?.replace(/\s+/g, '') || ''}`;
-    const displayId = customId || user.id.slice(-8).toUpperCase();
-    const fileName = sanitize 
-      ? `${fullName}${displayId}_Sanitized__Profile.pdf`
-      : `${fullName}${displayId}_Profile.pdf`;
-    
-    // Set response headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
-    
-    // Create PDF with A4 size
-    const doc = new PDFDocument({
-      size: 'A4',
-      margins: { top: 0, bottom: 0, left: 0, right: 0 }
+    const docs1 = await prisma.userDocument.findMany({
+      where: { userId: userId }
     });
     
+    const docs2 = await prisma.document.findMany({
+      where: { userId: userId }
+    });
+    
+    const docs = [
+      ...docs1.map(d => ({ 
+        documentType: d.documentType, 
+        documentNumber: d.documentNumber, 
+        isVerified: d.isVerified, 
+        documentUrl: d.documentUrl 
+      })),
+      ...docs2.map(d => ({ 
+        documentType: d.documentType, 
+        documentNumber: null, 
+        isVerified: d.status === 'APPROVED', 
+        documentUrl: d.documentUrl 
+      }))
+    ];
+    
+    const customId = user.customId || '';
+    const displayId = customId || user.id.slice(-8).toUpperCase();
+    const fileName = `${displayId}_Profile.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename=${fileName}`);
+    
+    const doc = new PDFDocument();
     doc.pipe(res);
     
     let y = 0;
+    let pageNum = 1;
     
-    // ========== PAGE 1 ==========
-    y = addProfessionalHeader(doc, user, displayId, sanitize);
+    y = addHeader(doc, 'User Profile Details');
     
-    // Add spacing after header
-    y += 20;
-    
-    // ========== PERSONAL INFORMATION SECTION ==========
-    // Check if we need a new page
-    if (y > 600) {
-      doc.addPage();
-      y = 40;
+    const pBuf = await fetchImage(profilePhotoUrl);
+    if (pBuf) { 
+      try { doc.image(pBuf, 40, y, { width: 70, height: 70 }); } catch {} 
     }
     
-    y = addSection(doc, 'Personal Information', y);
-    
-    y = addField(doc, 'Full Name:', `${user.firstName || ''} ${user.lastName || ''}`.trim(), 20, y);
-    y = addField(doc, 'Gender:', user.gender || 'Not provided', 20, y);
-    y = addField(doc, 'Date of Birth:', formatDate(user.dateOfBirth), 20, y);
-    y = addField(doc, 'Age:', user.age ? `${user.age} years` : 'Not provided', 20, y);
-    y = addField(doc, 'Blood Group:', user.bloodGroup || 'Not provided', 20, y);
-    y = addField(doc, 'Marital Status:', user.maritalStatus || 'Not provided', 20, y);
-    y = addField(doc, 'Religion:', user.religion || user.community || 'Not provided', 20, y);
-    y = addField(doc, 'Mother Tongue:', user.motherTongue || 'Not provided', 20, y);
-    y = addField(doc, 'Sub Caste:', user.subCaste || 'Not provided', 20, y);
-    y = addField(doc, 'Height:', user.height || 'Not provided', 20, y);
-    y = addField(doc, 'Weight:', user.weight ? `${user.weight} kg` : 'Not provided', 20, y);
-    y = addField(doc, 'Complexion:', user.complexion || 'Not provided', 20, y);
-    
-    // Check if we need a new page for next section
-    if (y > 600) {
-      doc.addPage();
-      y = 40;
+    doc.fontSize(18).fillColor('#333').text(`${user.firstName} ${user.lastName}`.toUpperCase(), 130, 48);
+    doc.fontSize(9).fillColor('#666').text(`ID: ${displayId}`, 130, 70);
+    if (user.isVerified) {
+      doc.fontSize(9).fillColor('#059669').text('✓ Verified', 130, 92);
+    }
+
+    const subscription = await prisma.subscription.findFirst({
+      where: { userId: user.id, status: 'ACTIVE' },
+      orderBy: { createdAt: 'desc' }
+    });
+    const tier = subscription?.plan || 'FREE';
+    if (tier !== 'FREE') {
+      const tierLabel = tier === 'PREMIUM' ? '★ Premium' : tier === 'PRO' ? '★ Pro' : tier === 'BASIC' ? '★ Basic' : `★ ${tier}`;
+      doc.fontSize(9).fillColor('#d97706').text(tierLabel, 130, 112);
     }
     
-    // ========== CONTACT INFORMATION SECTION ==========
-    y = addSection(doc, 'Contact Information', y);
-    
+    y = y + 100;
+    y = addSectionHeader(doc, 'Contact Information', y);
     if (sanitize) {
-      y = addField(doc, 'Email:', 'Hidden for privacy', 20, y);
-      y = addField(doc, 'Phone:', 'Hidden for privacy', 20, y);
+      y = addField(doc, 'Email:', 'Hidden for privacy', 40, y);
+      y = addField(doc, 'Phone:', 'Hidden for privacy', 40, y);
     } else {
-      y = addField(doc, 'Email:', user.email || 'Not provided', 20, y);
-      y = addField(doc, 'Phone:', user.phone || 'Not provided', 20, y);
+      y = addField(doc, 'Email:', user.email || 'Not provided', 40, y);
+      y = addField(doc, 'Phone:', user.phone || 'Not provided', 40, y);
     }
-    y = addField(doc, 'City:', user.city || 'Not provided', 20, y);
-    y = addField(doc, 'State:', user.state || 'Not provided', 20, y);
-    y = addField(doc, 'Country:', user.country || 'India', 20, y);
+    y = addField(doc, 'Age:', `${user.age || 'N/A'} years`, 40, y);
+    y = addField(doc, 'City:', user.city || 'Not provided', 40, y);
+    y = addField(doc, 'State:', user.state || 'Not provided', 40, y);
+    y = addField(doc, 'Country:', user.country || 'Not provided', 40, y);
     
-    // Check if we need a new page for family section
-    if (y > 650) {
-      doc.addPage();
-      y = 40;
-    }
+    y = addSectionHeader(doc, 'Personal Details', y);
+    y = addField(doc, 'Gender:', user.gender || 'Not provided', 40, y);
+    y = addField(doc, 'Marital Status:', user.maritalStatus || 'Not provided', 40, y);
+    y = addField(doc, 'Community:', user.community || 'Not provided', 40, y);
+    y = addField(doc, 'Sub Caste:', user.subCaste || 'Not provided', 40, y);
+    y = addField(doc, 'Height:', user.height || 'Not provided', 40, y);
+    y = addField(doc, 'Weight:', user.weight || 'Not provided', 40, y);
+    y = addField(doc, 'Complexion:', user.complexion || 'Not provided', 40, y);
     
-    // ========== FAMILY DETAILS SECTION ==========
-    y = addSection(doc, 'Family Details', y);
+    y = addSectionHeader(doc, 'Professional Details', y);
+    y = addField(doc, 'Education:', user.education || 'Not provided', 40, y);
+    y = addField(doc, 'Profession:', user.profession || 'Not provided', 40, y);
+    y = addField(doc, 'Income:', user.income || 'Not provided', 40, y);
     
-    if (sanitize) {
-      y = addField(doc, 'Family Details:', 'Hidden for privacy', 20, y);
-    } else {
-      y = addField(doc, 'Father Name:', user.fatherName || 'Not provided', 20, y);
-      y = addField(doc, 'Mother Name:', user.motherName || 'Not provided', 20, y);
-      y = addField(doc, 'Siblings:', user.siblings || 'Not provided', 20, y);
-      y = addField(doc, 'Family Type:', user.familyType || 'Not provided', 20, y);
-      y = addField(doc, 'Family Values:', user.familyValues || 'Not provided', 20, y);
-    }
-    
-    // Add watermark on page 1
     if (!sanitize) {
-      addWatermark(doc);
+      y = addSectionHeader(doc, 'Family Details', y);
+      y = addField(doc, 'Father Name:', user.fatherName || 'Not provided', 40, y);
+      y = addField(doc, 'Father Occupation:', user.fatherOccupation || 'Not provided', 40, y);
+      y = addField(doc, 'Mother Name:', user.motherName || 'Not provided', 40, y);
+      y = addField(doc, 'Mother Occupation:', user.motherOccupation || 'Not provided', 40, y);
+      y = addField(doc, 'Family Values:', user.familyValues || 'Not provided', 40, y);
+      y = addField(doc, 'Family Type:', user.familyType || 'Not provided', 40, y);
+      y = addField(doc, 'Family Status:', user.familyStatus || 'Not provided', 40, y);
+      y = addField(doc, 'About Family:', user.aboutFamily || 'Not provided', 40, y);
     }
     
-    // ========== PAGE 2 ==========
-    doc.addPage();
-    y = 20;
+    y = addSectionHeader(doc, 'Horoscope Details', y);
+    y = addField(doc, 'Raasi:', user.raasi || 'Not provided', 40, y);
+    y = addField(doc, 'Natchathiram:', user.natchathiram || 'Not provided', 40, y);
+    y = addField(doc, 'Dhosam:', user.dhosam || 'Not provided', 40, y);
+    y = addField(doc, 'Birth Time:', user.birthTime || 'Not provided', 40, y);
+    y = addField(doc, 'Birth Place:', user.birthPlace || 'Not provided', 40, y);
     
-    // ========== EDUCATION & CAREER SECTION ==========
-    y = addSection(doc, 'Education & Career', y);
+    y = addSectionHeader(doc, 'About', y);
+    const aboutText = user.bio || 'Not provided';
+    const maxBioHeight = 60;
+    doc.fontSize(9).fillColor('#444').text(aboutText, 40, y, { width: 500, height: maxBioHeight });
     
-    y = addField(doc, 'Education:', user.education || 'Not provided', 20, y);
-    y = addField(doc, 'Occupation:', user.occupation || 'Not provided', 20, y);
-    y = addField(doc, 'Employer:', user.employer || 'Not provided', 20, y);
-    y = addField(doc, 'Annual Income:', user.annualIncome || 'Not provided', 20, y);
-    y = addField(doc, 'Work Location:', user.workLocation || 'Not provided', 20, y);
-    y = addField(doc, 'Job Type:', user.jobType || 'Not provided', 20, y);
+    addWatermark(doc, WATERMARK_TEXT, 0.20);
     
-    // ========== HOROSCOPE DETAILS SECTION ==========
-    y = addSection(doc, 'Horoscope Details', y);
-    
-    y = addField(doc, 'Rashi:', user.rasi || 'Not provided', 20, y);
-    y = addField(doc, 'Natchathiram:', user.natchathiram || 'Not provided', 20, y);
-    y = addField(doc, 'Manglik/Dosham:', user.dosham || 'None', 20, y);
-    y = addField(doc, 'Birth Time:', user.birthTime || 'Not provided', 20, y);
-    y = addField(doc, 'Birth Place:', user.birthPlace || 'Not provided', 20, y);
-    
-    // ========== PARTNER PREFERENCES SECTION ==========
-    y = addSection(doc, 'Partner Preferences', y);
-    
-    y = addField(doc, 'Preferred Age:', user.preferredAge || 'Not specified', 20, y);
-    y = addField(doc, 'Preferred Height:', user.preferredHeight || 'Not specified', 20, y);
-    y = addField(doc, 'Preferred Education:', user.preferredEducation || 'Not specified', 20, y);
-    y = addField(doc, 'Preferred Occupation:', user.preferredOccupation || 'Not specified', 20, y);
-    y = addField(doc, 'Preferred Location:', user.preferredLocation || 'Not specified', 20, y);
-    
-    // ========== ABOUT ME SECTION ==========
-    if (user.aboutMe || user.bio) {
-      y = addSection(doc, 'About Me', y);
-      
-      const aboutText = user.aboutMe || user.bio;
-      doc.fontSize(9);
-      doc.fillColor(TEXT_COLOR);
-      const aboutY = doc.text(aboutText, 20, y, {
-        width: doc.internal.pageSize.getWidth() - 40,
-        align: 'justify'
-      });
-      y = aboutY + 15;
-    }
-    
-    // Add watermark on page 2
-    if (!sanitize) {
-      addWatermark(doc);
-    }
-    
-    // ========== GALLERY PAGES ==========
-    if (gallery.length > 0) {
+    for (let i = 0; i < gallery.length; i++) {
       doc.addPage();
-      y = 20;
-      y = await addGalleryPage(doc, gallery, y);
+      pageNum++;
+      
+      y = addHeader(doc, `Gallery Photo ${i + 1} of ${gallery.length}`);
+      
+      const buf = await fetchImage(gallery[i]);
+      if (buf) {
+        try {
+          const imgWidth = doc.page.width - 80;
+          const imgHeight = doc.page.height - 110;
+          doc.image(buf, 40, 70, { width: imgWidth, height: imgHeight });
+          addWatermark(doc, WATERMARK_TEXT, 0.2);
+        } catch (e) {
+          doc.fontSize(12).fillColor('#666').text('Unable to display image', 40, 200);
+        }
+      } else {
+        doc.fontSize(12).fillColor('#666').text('Image not found', 40, 200);
+      }
     }
     
-    // ========== DOCUMENTS PAGE ==========
-    if (docs.length > 0 && !sanitize) {
+    for (let i = 0; i < docs.length; i++) {
       doc.addPage();
-      y = addSection(doc, 'Documents', 20);
+      pageNum++;
       
-      for (const docItem of docs) {
-        y = addField(doc, 'Document:', docItem.documentType || 'Document', 20, y);
-        if (y > 700) {
-          doc.addPage();
-          y = addSection(doc, 'Documents (Continued)', 20);
+      doc.fillColor('#8B5CF6').rect(30, 20, doc.page.width - 60, 35).fill();
+      doc.fillColor('#FFFFFF').fontSize(14).text(`Document ${i + 1} of ${docs.length}`, 40, 30, { align: 'center' });
+      
+      y = 70;
+      const docType = docs[i].documentType || 'N/A';
+      const docTypeLabel = docType === 'GOVERNMENT_ID' ? 'Government ID (Aadhaar / PAN / Passport / Driving License)' :
+                           docType === 'PHOTO_ID' ? 'Selfie / Live Photo Verification' :
+                           docType === 'AGE_PROOF' ? 'Age Proof (Birth Certificate / 10th / 12th Certificate / Passport / Aadhaar)' :
+                           docType === 'EDUCATION_CERTIFICATE' ? 'Education Certificate (Degree / Diploma / School Certificate)' :
+                           docType === 'EMPLOYMENT_PROOF' ? 'Employment Proof (Offer Letter / Company ID / Experience Letter)' :
+                           docType === 'FINANCIAL_PROOF' ? 'Financial Verification (Salary Slip / ITR / Bank Statement)' :
+                           docType === 'MARITAL_STATUS_PROOF' ? 'Marital Status Proof (Divorce Decree / Death Certificate)' :
+                           docType === 'CASTE_CERTIFICATE' ? 'Caste Certificate (Optional)' :
+                           docType === 'OTHER' ? 'Other Supporting Documents' : docType;
+      
+      doc.fontSize(12).fillColor('#333').text(`Type: ${docTypeLabel}`, 40, y);
+      const docFileName = docs[i].fileName || docs[i].documentUrl?.split('/').pop() || 'N/A';
+      doc.fontSize(12).fillColor('#333').text(`File Name: ${docFileName}`, 40, y + 18);
+      if (docs[i].isVerified) {
+        doc.fontSize(12).fillColor('#059669').text('✓ Verified', 40, y + 36);
+      }
+      
+      if (docs[i].documentUrl) {
+        const docBuf = await fetchImage(docs[i].documentUrl);
+        if (docBuf) {
+          try {
+            y = 120;
+            doc.image(docBuf, 40, y, { width: doc.page.width - 80, height: doc.page.height - 160 });
+          } catch (e) {
+            doc.fontSize(12).fillColor('#666').text('Unable to display document', 40, 150);
+          }
         }
       }
       
-      addWatermark(doc);
+      addWatermark(doc, WATERMARK_TEXT, 0.2);
     }
     
-    // Add footer to all pages
-    addFooter(doc);
-    
-    // Finalize PDF
     doc.end();
     
+    console.log(`Shared profile PDF generated for ${userId}, pages: ${pageNum}, sanitize: ${sanitize}`);
+    
   } catch (error) {
-    console.error('Error generating PDF:', error);
+    console.error('Shared profile PDF generation error:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to generate PDF' });
     }
+  }
+});
+
+/**
+ * POST /api/shared-profile/:userId/cloud-upload
+ * Generate PDF on server, upload to Cloudinary, return shareable URL
+ */
+router.post('/:userId/cloud-upload', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { name } = req.body;
+    
+    const { isCloudinaryConfigured, uploadBuffer } = require('../utils/upload');
+    
+    if (!isCloudinaryConfigured()) {
+      return res.status(500).json({ error: 'Cloudinary not configured' });
+    }
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    if (!user.isActive) {
+      return res.status(404).json({ error: 'Profile not available' });
+    }
+    
+    let profilePhoto = null;
+    if (user.profilePhoto) {
+      profilePhoto = await fetchImage(user.profilePhoto);
+    }
+    
+    const galleryImages = [];
+    if (user.photos) {
+      try {
+        const photos = JSON.parse(user.photos);
+        for (const photo of photos.slice(0, 5)) {
+          if (photo && typeof photo === 'string') {
+            const img = await fetchImage(photo);
+            if (img) galleryImages.push(img);
+          }
+        }
+      } catch {}
+    }
+    
+    const documents = await prisma.userDocument.findMany({
+      where: { userId: userId },
+      take: 3
+    });
+    
+    const docImages = [];
+    for (const doc of documents) {
+      if (doc.fileUrl) {
+        const docImg = await fetchImage(doc.fileUrl);
+        if (docImg) docImages.push(docImg);
+      }
+    }
+    
+    const customId = user.customId || '';
+    const displayId = customId || user.id.slice(-8).toUpperCase();
+    const fileName = name ? `${name.replace(/\s+/g, '_')}_Profile` : `Profile_${displayId}`;
+    const timestamp = Date.now();
+    
+    const pdfBuffer = await generatePDFBuffer(user, profilePhoto, galleryImages, docImages, WATERMARK_TEXT);
+    
+    const uploadResult = await uploadBuffer(pdfBuffer, {
+      folder: 'matrimony-profiles',
+      publicId: `${fileName}_${timestamp}`,
+      resource_type: 'raw',
+      format: 'pdf'
+    });
+    
+    res.json({
+      success: true,
+      url: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+      format: 'pdf',
+      message: 'PDF uploaded. Use URL to share via WhatsApp.'
+    });
+    
+  } catch (error) {
+    console.error('Cloudinary upload error:', error);
+    res.status(500).json({ error: 'Failed to upload PDF: ' + error.message });
   }
 });
 
