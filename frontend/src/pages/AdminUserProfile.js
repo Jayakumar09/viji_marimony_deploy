@@ -48,23 +48,30 @@ function TabPanel(props) {
  * Displays complete user profile for admin verification
  */
 
-// Document type labels helper
+// Document type labels helper - MUST match user dashboard DOCUMENT_TYPES exactly
 const getDocumentTypeLabel = (docType) => {
   const labels = {
     'GOVERNMENT_ID': 'Government ID (Masked Aadhaar - last 4 digits, PAN, Passport, Driving License)',
+    'ADDRESS_PROOF': 'Proof of Current Address (Voter ID, Rent Agreement, Utility Bills)',
+    'FINANCIAL_PROOF': 'Financial Verification (Bank Statement/ITR)',
     'PHOTO_ID': 'Photo ID Proof (Live Selfie)',
-    'AGE_PROOF': 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)',
     'BIRTH_CERTIFICATE': 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)',
     'EDUCATION_CERTIFICATE': 'Education Certificate (Degree/Diploma Certificates)',
-    'EMPLOYMENT_PROOF': 'Employment Proof (Offer Letter / Company ID / Experience Letter)',
-    'FINANCIAL_PROOF': 'Financial Verification (Bank Statement/ITR)',
-    'ADDRESS_PROOF': 'Proof of Current Address (Voter ID, Rent Agreement, Utility Bills)',
-    'MARITAL_STATUS_PROOF': 'Marital Status Proof (Divorce Decree / Death Certificate)',
-    'CASTE_CERTIFICATE': 'Caste Certificate (Optional)',
     'OTHER': 'Other Documents (if any)'
   };
   return labels[docType] || docType;
 };
+
+// All valid document types (for display in admin panel)
+const VALID_DOCUMENT_TYPES = [
+  { id: 'GOVERNMENT_ID', label: 'Government ID (Masked Aadhaar - last 4 digits, PAN, Passport, Driving License)', required: true },
+  { id: 'ADDRESS_PROOF', label: 'Proof of Current Address (Voter ID, Rent Agreement, Utility Bills)', required: true },
+  { id: 'FINANCIAL_PROOF', label: 'Financial Verification (Bank Statement/ITR)', required: true },
+  { id: 'PHOTO_ID', label: 'Photo ID Proof (Live Selfie)', required: true },
+  { id: 'BIRTH_CERTIFICATE', label: 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)', required: false },
+  { id: 'EDUCATION_CERTIFICATE', label: 'Education Certificate (Degree/Diploma Certificates)', required: false },
+  { id: 'OTHER', label: 'Other Documents (if any)', required: false }
+];
 
 const AdminUserProfile = () => {
   const { id } = useParams();

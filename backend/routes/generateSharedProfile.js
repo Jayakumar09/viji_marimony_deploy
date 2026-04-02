@@ -356,15 +356,11 @@ router.get('/:userId', async (req, res) => {
       y = 70;
       const docType = docs[i].documentType || 'N/A';
       const docTypeLabel = docType === 'GOVERNMENT_ID' ? 'Government ID (Masked Aadhaar - last 4 digits, PAN, Passport, Driving License)' :
+                           docType === 'ADDRESS_PROOF' ? 'Proof of Current Address (Voter ID, Rent Agreement, Utility Bills)' :
+                           docType === 'FINANCIAL_PROOF' ? 'Financial Verification (Bank Statement/ITR)' :
                            docType === 'PHOTO_ID' ? 'Photo ID Proof (Live Selfie)' :
-                           docType === 'AGE_PROOF' ? 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)' :
                            docType === 'BIRTH_CERTIFICATE' ? 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)' :
                            docType === 'EDUCATION_CERTIFICATE' ? 'Education Certificate (Degree/Diploma Certificates)' :
-                           docType === 'EMPLOYMENT_PROOF' ? 'Employment Proof (Offer Letter / Company ID / Experience Letter)' :
-                           docType === 'FINANCIAL_PROOF' ? 'Financial Verification (Bank Statement/ITR)' :
-                           docType === 'ADDRESS_PROOF' ? 'Proof of Current Address (Voter ID, Rent Agreement, Utility Bills)' :
-                           docType === 'MARITAL_STATUS_PROOF' ? 'Marital Status Proof (Divorce Decree / Death Certificate)' :
-                           docType === 'CASTE_CERTIFICATE' ? 'Caste Certificate (Optional)' :
                            docType === 'OTHER' ? 'Other Documents (if any)' : docType;
       
       doc.fontSize(12).fillColor('#333').text(`Type: ${docTypeLabel}`, 40, y);

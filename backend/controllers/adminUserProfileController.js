@@ -290,14 +290,19 @@ const getAdminUserProfile = async (req, res) => {
       },
       profilePhoto: finalProfilePhoto,
       galleryPhotos: finalGalleryPhotos,
-      documents: user.documents.map(doc => ({
-        id: doc.id,
-        documentType: doc.documentType,
-        documentUrl: doc.documentUrl,
-        fileName: doc.fileName,
-        status: doc.status,
-        uploadedAt: doc.uploadedAt
-      })),
+      documents: user.documents
+        .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))
+        .filter((doc, index, self) => 
+          index === self.findIndex(d => d.documentType === doc.documentType)
+        )
+        .map(doc => ({
+          id: doc.id,
+          documentType: doc.documentType,
+          documentUrl: doc.documentUrl,
+          fileName: doc.fileName,
+          status: doc.status,
+          uploadedAt: doc.uploadedAt
+        })),
       userDocuments: userDocuments,
       verificationDetails: verificationDetails,
       subscriptionDetails: user.subscriptions.length > 0 ? {
