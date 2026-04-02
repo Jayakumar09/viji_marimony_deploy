@@ -30,18 +30,33 @@ const allowedOrigins = isProduction
       process.env.FRONTEND_URL, // Dynamic frontend URL
       'https://vijayalakshmiboyarmatrimony.com',
       'https://www.vijayalakshmiboyarmatrimony.com',
+      'https://vijayalakshmimarriage.com',
+      'https://www.vijayalakshmimarriage.com',
       'https://viji-marimony-deploy-backend.onrender.com',
+      'https://viji-marimony-deploy.onrender.com',
     ].filter(Boolean)
   : ['http://localhost:3000', 'http://localhost:3001'];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('workers.dev') || origin.includes('pages.dev') || origin.includes('onrender.com')) {
+    const allowed = [
+      ...allowedOrigins,
+      'https://vijayalakshmiboyarmatrimony.com',
+      'https://www.vijayalakshmiboyarmatrimony.com',
+      'https://vijayalakshmimarriage.com',
+      'https://www.vijayalakshmimarriage.com'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || 
+        allowed.includes(origin) ||
+        origin.includes('workers.dev') || 
+        origin.includes('pages.dev') || 
+        origin.includes('onrender.com')) {
       callback(null, true);
     } else {
+      console.log('[CORS] Origin not allowed:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -49,6 +64,32 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'admin-token', 'x-admin-token', 'x-admin-user', 'Cache-Control']
 }));
+
+// Explicitly handle preflight OPTIONS requests for all /api routes
+app.options('/api/*', (req, res) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://vijayalakshmiboyarmatrimony.com',
+    'https://www.vijayalakshmiboyarmatrimony.com',
+    'https://vijayalakshmimarriage.com',
+    'https://www.vijayalakshmimarriage.com',
+    'https://viji-marimony-deploy-backend.onrender.com',
+    'https://viji-marimony-deploy.onrender.com',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ];
+  
+  if (allowedOrigins.includes(origin) || !origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, admin-token, x-admin-token, x-admin-user, Cache-Control');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    res.status(200).send();
+  } else {
+    res.status(403).send('CORS not allowed');
+  }
+});
 
 // Security middleware
 app.use(helmet({
