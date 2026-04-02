@@ -303,22 +303,25 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       const lastName = profileData.lastName || '';
       const name = `${firstName} ${lastName}`.trim();
 
-      let shareMessage = `💍 *${name}'s Profile - Vijayalakshmi Boyar Matrimony*\n\n`;
+      // Build message without emojis to avoid encoding issues
+      let shareMessage = `${name}'s Profile - Vijayalakshmi Boyar Matrimony\n\n`;
+      shareMessage += `-----------------------------\n`;
 
-      if (profileData.age) shareMessage += `👤 Age: ${profileData.age} years\n`;
-      if (profileData.gender) shareMessage += `⚥ Gender: ${profileData.gender}\n`;
-      if (profileData.height) shareMessage += `📏 Height: ${profileData.height}\n`;
-      if (profileData.complexion) shareMessage += `🎨 Complexion: ${profileData.complexion}\n`;
-      if (profileData.community) shareMessage += `🕉️ Community: ${profileData.community}\n`;
-      if (profileData.subCaste) shareMessage += `📿 Subcaste: ${profileData.subCaste}\n`;
-      if (profileData.education) shareMessage += `🎓 Education: ${profileData.education}\n`;
-      if (profileData.profession) shareMessage += `💼 Profession: ${profileData.profession}\n`;
-      if (profileData.city || profileData.state) shareMessage += `📍 Location: ${[profileData.city, profileData.state].filter(Boolean).join(', ')}\n`;
-      if (profileData.maritalStatus) shareMessage += `💍 Marital Status: ${profileData.maritalStatus}\n`;
+      if (profileData.age) shareMessage += `Age: ${profileData.age} years\n`;
+      if (profileData.gender) shareMessage += `Gender: ${profileData.gender}\n`;
+      if (profileData.height) shareMessage += `Height: ${profileData.height}\n`;
+      if (profileData.complexion) shareMessage += `Complexion: ${profileData.complexion}\n`;
+      if (profileData.community) shareMessage += `Community: ${profileData.community}\n`;
+      if (profileData.subCaste) shareMessage += `Sub Caste: ${profileData.subCaste}\n`;
+      if (profileData.education) shareMessage += `Education: ${profileData.education}\n`;
+      if (profileData.profession) shareMessage += `Profession: ${profileData.profession}\n`;
+      if (profileData.city || profileData.state) shareMessage += `Location: ${[profileData.city, profileData.state].filter(Boolean).join(', ')}\n`;
+      if (profileData.maritalStatus) shareMessage += `Marital Status: ${profileData.maritalStatus}\n`;
 
-      shareMessage += `\n✨ *Vijayalakshmi Boyar Matrimony*\n`;
-      shareMessage += `\n🔗 View Profile: ${profileLink}\n`;
-      shareMessage += `📄 *Download PDF:* ${pdfLink}\n\n`;
+      shareMessage += `-----------------------------\n\n`;
+      shareMessage += `Vijayalakshmi Boyar Matrimony\n`;
+      shareMessage += `View Profile: ${profileLink}\n`;
+      shareMessage += `Download PDF: ${pdfLink}\n\n`;
       shareMessage += `Regards,\nVijayalakshmi Boyar Matrimony`;
 
       // Open WhatsApp with direct message
@@ -376,70 +379,33 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
     
     try {
       const isSanitized = shareOption === 'other';
-      const pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
       
-      const formData = new FormData();
-      formData.append('pdf', pdfBlob, `${profileName.replace(/\s+/g, '_')}_Profile.pdf`);
-      formData.append('email', email);
-      formData.append('profileName', profileName);
-      formData.append('shareType', shareOption);
-
-      // Use short timeout for email API - if it takes too long, use mailto fallback
-      const response = await api.post('/admin/share-profile-email', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 10000 // 10 second timeout
+      // Download PDF
+      let pdfBlob;
+      try {
+        pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
+      } catch {
+        pdfBlob = getProfilePDFBlob(profileData, isSanitized);
+      }
+      
+      // Use mailto + download PDF fallback (skip slow SMTP API)
+      await openMailtoWithPdf(email, profileName, pdfBlob);
+      
+      await logActivity('SHARE_PROFILE_EMAIL', {
+        userId: userId,
+        userCustomId: profileData?.customId,
+        userName: profileData?.firstName,
+        shareType: shareOption,
+        recipientEmail: email,
+        method: 'mailto_with_pdf',
+        timestamp: new Date().toISOString()
       });
       
-      if (response.data?.fallback || response.data?.success) {
-        await openMailtoWithPdf(email, profileName, pdfBlob);
-        
-        await logActivity('SHARE_PROFILE_EMAIL', {
-          userId: userId,
-          userCustomId: profileData?.customId,
-          userName: profileData?.firstName,
-          shareType: shareOption,
-          recipientEmail: email,
-          method: 'mailto_with_pdf',
-          timestamp: new Date().toISOString()
-        });
-      }
-      
       setEmail('');
-      toast.success(`Email ready! Please send from your email client.`);
+      toast.success('Email ready! PDF downloaded. Please send email.');
     } catch (error) {
       console.error('Email share error:', error);
-      
-      // Fallback: Download PDF and open mailto
-      try {
-        const isSanitized = shareOption === 'other';
-        let pdfBlob;
-        try {
-          pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
-        } catch {
-          pdfBlob = getProfilePDFBlob(profileData, isSanitized);
-        }
-        
-        await openMailtoWithPdf(email, profileName, pdfBlob);
-        
-        await logActivity('SHARE_PROFILE_EMAIL', {
-          userId: userId,
-          userCustomId: profileData?.customId,
-          userName: profileData?.firstName,
-          shareType: shareOption,
-          recipientEmail: email,
-          method: 'mailto_fallback',
-          timestamp: new Date().toISOString()
-        });
-        
-        toast.success(`Email ready! Please send from your email client.`);
-      } catch (downloadError) {
-        console.error('PDF download error:', downloadError);
-        downloadProfilePDF(profileData, shareOption === 'other');
-        toast.error('Email service unavailable. PDF downloaded - please attach manually.');
-      }
-      
-      setEmail('');
-    } finally {
+      toast.error('Failed to share. Please try again.');
       setEmailLoading(false);
     }
   };
