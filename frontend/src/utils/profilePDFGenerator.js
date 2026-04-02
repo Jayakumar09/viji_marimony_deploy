@@ -1,6 +1,6 @@
 /**
  * Profile PDF Generator Utility - Professional Layout
- * @version 4.0.1 - Fixed autoTable registration
+ * @version 5.0.0 - Aligned with backend PDF generation
  */
 
 import jsPDF from 'jspdf';

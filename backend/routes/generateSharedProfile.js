@@ -1,6 +1,7 @@
 /**
  * Generate Shared Profile PDF Route
  * Uses Prisma (PostgreSQL) for production database
+ * Professional PDF Layout based on successful implementation
  * 
  * Web Link Format:
  * - Full Profile: /api/shared-profile/:userId
@@ -19,7 +20,11 @@ const axios = require('axios');
 const { prisma } = require('../utils/database');
 
 const WATERMARK_TEXT = 'Vijayalakshmi Boyar Matrimony';
-const WATERMARK_FONT = 'Helvetica';
+
+// Color constants
+const PRIMARY_COLOR = '#8B5CF6';
+const SECONDARY_COLOR = '#6B7280';
+const TEXT_COLOR = '#1F2937';
 
 async function fetchImage(imagePath) {
   try {
@@ -66,19 +71,12 @@ async function fetchImage(imagePath) {
 // Extract public ID from Cloudinary URL
 function extractCloudinaryPublicId(cloudinaryUrl) {
   try {
-    // Handle various Cloudinary URL formats
-    // Example: https://res.cloudinary.com/do6o1xqs1/image/upload/v1234567890/user_abc.jpg
     const parts = cloudinaryUrl.split('/');
     const uploadIndex = parts.indexOf('upload');
     if (uploadIndex === -1) return null;
     
-    // Get everything after 'upload'
     let publicId = parts.slice(uploadIndex + 1).join('/');
-    
-    // Remove version number if present (v1234567890)
     publicId = publicId.replace(/^v\d+\//, '');
-    
-    // Remove file extension - include all common image formats
     publicId = publicId.replace(/\.(jpg|jpeg|png|gif|webp)$/i, '');
     
     return publicId;
@@ -92,20 +90,234 @@ function formatDate(dateString) {
   return new Date(dateString).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function addSectionHeader(doc, title, y) {
-  doc.fontSize(14).fillColor('#8B5CF6').text(title, 40, y);
-  return y + 18;
+/**
+ * Add diagonal watermark across all pages
+ */
+function addWatermark(doc) {
+  const pageCount = doc.internal.getNumberOfPages();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  
+  for (let i = 1; i <= pageCount; i++) {
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({ opacity: 0.08 }));
+    doc.setTextColor(139, 92, 246);
+    doc.fontSize(30);
+    
+    // Diagonal watermark pattern
+    const spacing = 80;
+    const numWatermarks = Math.ceil(pageHeight / spacing) + 2;
+    
+    for (let j = 0; j < numWatermarks; j++) {
+      const x = -100 + (j * spacing);
+      const y = pageHeight - (j * spacing * 0.8);
+      
+      if (y > -50 && y < pageHeight + 50) {
+        doc.text(WATERMARK_TEXT, x, y, {
+          lineBreak: false
+        });
+      }
+    }
+    
+    doc.restoreGraphicsState();
+  }
 }
 
+/**
+ * Add professional header with profile info
+ */
+function addProfessionalHeader(doc, user, displayId, isSanitized) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  
+  // Header background - Purple gradient effect
+  doc.fillColor(PRIMARY_COLOR);
+  doc.rect(0, 0, pageWidth, 70).fill();
+  
+  // Title
+  doc.fillColor('#FFFFFF');
+  doc.fontSize(20);
+  doc.font('Helvetica-Bold');
+  doc.text('Profile Details', 20, 15);
+  
+  // Subtitle
+  doc.fontSize(10);
+  doc.font('Helvetica');
+  doc.text('Vijayalakshmi Boyar Matrimony', 20, 32);
+  
+  // Profile Name on right
+  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim().toUpperCase();
+  doc.fontSize(16);
+  doc.font('Helvetica-Bold');
+  doc.text(fullName, pageWidth - 20, 15, { align: 'right', width: 150 });
+  
+  // Profile ID
+  doc.fontSize(10);
+  doc.font('Helvetica');
+  doc.text(`ID: ${displayId}`, pageWidth - 20, 32, { align: 'right', width: 150 });
+  
+  // Verification badge
+  if (user.isVerified) {
+    doc.fillColor('#10B981'); // Green
+    doc.text('✓ Verified', pageWidth - 20, 44, { align: 'right', width: 150 });
+  }
+  
+  // Subscription tier
+  const tier = user.subscriptionTier || 'FREE';
+  if (tier !== 'FREE') {
+    doc.fillColor('#F59E0B'); // Amber
+    const tierLabel = tier === 'PREMIUM' ? '★ Premium' : tier === 'PRO' ? '★ Pro' : `★ ${tier}`;
+    doc.text(tierLabel, pageWidth - 20, isSanitized ? 44 : 56, { align: 'right', width: 150 });
+  }
+  
+  // Profile Photo placeholder on right
+  const photoX = pageWidth - 65;
+  const photoY = 75;
+  const photoSize = 55;
+  
+  // White background for photo
+  doc.fillColor('#FFFFFF');
+  doc.roundedRect(photoX, photoY, photoSize, photoSize, 3, 3).fill();
+  doc.strokeColor('#E5E7EB');
+  doc.lineWidth(1);
+  doc.roundedRect(photoX, photoY, photoSize, photoSize, 3, 3).stroke();
+  
+  // Person silhouette
+  doc.fillColor('#D1D5DB');
+  doc.circle(photoX + photoSize/2, photoY + 18, 8, 'F'); // Head
+  doc.circle(photoX + photoSize/2, photoY + 35, 12, 'F'); // Body
+  
+  // Photo label
+  doc.fillColor('#9CA3AF');
+  doc.fontSize(6);
+  doc.text('Photo', photoX + photoSize/2, photoY + photoSize - 5, { align: 'center' });
+  
+  return 140; // Return next Y position
+}
+
+/**
+ * Add a section with title bar
+ */
+function addSection(doc, title, startY) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  
+  // Section title bar
+  doc.fillColor(PRIMARY_COLOR);
+  doc.roundedRect(15, startY, pageWidth - 30, 8, 2, 2).fill();
+  
+  doc.fillColor('#FFFFFF');
+  doc.fontSize(10);
+  doc.font('Helvetica-Bold');
+  doc.text(title, 20, startY + 2);
+  
+  return startY + 15;
+}
+
+/**
+ * Add field with label and value
+ */
 function addField(doc, label, value, x, y) {
-  doc.fontSize(10).fillColor('#666').text(label, x, y);
-  doc.fillColor('#333').text(value || 'N/A', x + 80, y);
-  return y + 14;
+  doc.fontSize(9);
+  doc.fillColor(SECONDARY_COLOR);
+  doc.font('Helvetica-Bold');
+  doc.text(label, x, y);
+  
+  doc.fillColor(TEXT_COLOR);
+  doc.font('Helvetica');
+  doc.text(String(value || 'N/A'), x + 60, y);
+  
+  return y + 12;
 }
 
-function addHeader(doc, title) {
-  doc.fontSize(16).fillColor('#8B5CF6').text(title, 40, 40);
-  return 80;
+/**
+ * Add footer
+ */
+function addFooter(doc) {
+  const pageCount = doc.internal.getNumberOfPages();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    
+    // Footer line
+    doc.strokeColor(PRIMARY_COLOR);
+    doc.lineWidth(0.5);
+    doc.line(15, pageHeight - 20, pageWidth - 15, pageHeight - 20);
+    
+    // Footer text
+    doc.fillColor('#9CA3AF');
+    doc.fontSize(8);
+    doc.font('Helvetica');
+    doc.text('Generated by Vijayalakshmi Boyar Matrimony', 15, pageHeight - 14);
+    
+    // Page number
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 14, { align: 'center' });
+    
+    // Timestamp
+    const timestamp = new Date().toLocaleString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    doc.text(timestamp, pageWidth - 15, pageHeight - 14, { align: 'right' });
+  }
+}
+
+/**
+ * Add gallery page with grid layout
+ */
+async function addGalleryPage(doc, gallery, startY) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  // Add section header
+  const sectionY = addSection(doc, 'Photo Gallery', startY);
+  
+  const galleryY = sectionY + 10;
+  const cols = 2;
+  const photoWidth = (pageWidth - 60) / cols;
+  const photoHeight = 100;
+  const gap = 10;
+  
+  for (let i = 0; i < gallery.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    
+    const x = 20 + (col * (photoWidth + gap));
+    const y = galleryY + (row * (photoHeight + gap));
+    
+    // Check if we need a new page
+    if (y + photoHeight > pageHeight - 40) {
+      doc.addPage();
+      const newSectionY = addSection(doc, 'Photo Gallery (Continued)', 20);
+      return newSectionY + photoHeight + 20;
+    }
+    
+    // Photo background
+    doc.fillColor('#F3F4F6');
+    doc.roundedRect(x, y, photoWidth, photoHeight, 3, 3).fill();
+    doc.strokeColor('#E5E7EB');
+    doc.roundedRect(x, y, photoWidth, photoHeight, 3, 3).stroke();
+    
+    // Try to load image
+    const imgBuf = await fetchImage(gallery[i]);
+    if (imgBuf) {
+      try {
+        doc.image(imgBuf, x, y, { width: photoWidth, height: photoHeight, fit: [photoWidth, photoHeight] });
+      } catch (e) {
+        // Keep placeholder
+        doc.fillColor('#D1D5DB');
+        doc.text(`Photo ${i + 1}`, x + photoWidth/2, y + photoHeight/2, { align: 'center' });
+      }
+    } else {
+      doc.fillColor('#D1D5DB');
+      doc.text(`Photo ${i + 1}`, x + photoWidth/2, y + photoHeight/2, { align: 'center' });
+    }
+  }
+  
+  return galleryY + (Math.ceil(gallery.length / cols) * (photoHeight + gap)) + 10;
 }
 
 /**
@@ -116,12 +328,9 @@ router.get('/:userId/pages', async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Fetch user profile using Prisma (PostgreSQL)
     const user = await prisma.user.findUnique({
       where: { id: userId }
     });
-    
-    console.log('Page count for userId:', userId, 'User found:', !!user, 'isActive:', user?.isActive);
     
     if (!user) {
       return res.status(404).json({ error: 'Profile not found' });
@@ -131,9 +340,6 @@ router.get('/:userId/pages', async (req, res) => {
       return res.status(404).json({ error: 'Profile not available' });
     }
 
-    // Get profile photo 
-    let profilePhotoUrl = user.profilePhoto;
-    
     // Get gallery count
     let galleryCount = 0;
     if (user.photos) {
@@ -147,34 +353,17 @@ router.get('/:userId/pages', async (req, res) => {
       } catch {}
     }
     
-    // Get documents count
-    let docsCount = 0;
-    try {
-      const docs = await prisma.userDocument.findMany({
-        where: { userId: userId }
-      });
-      docsCount = docs.length;
-    } catch {}
-    
     // Estimate pages needed
-    // Page 1: Profile + Contact + Personal + Family
-    // Page 2: Professional + Education + Horoscope
-    // Page 3+: Gallery (2-3 photos per page)
-    // Last page: Documents
-    let estimatedPages = 3; // Base pages
-    if (galleryCount > 6) {
-      estimatedPages += Math.ceil((galleryCount - 6) / 3);
-    }
-    if (docsCount > 0) {
-      estimatedPages += 1;
+    let estimatedPages = 2; // Base pages
+    if (galleryCount > 0) {
+      estimatedPages += Math.ceil(galleryCount / 2); // 2 photos per page
     }
     
     return res.json({
       success: true,
       pages: estimatedPages,
-      profilePhoto: !!profilePhotoUrl,
-      galleryCount,
-      docsCount
+      profilePhoto: !!user.profilePhoto,
+      galleryCount
     });
     
   } catch (error) {
@@ -232,153 +421,146 @@ router.get('/:userId', async (req, res) => {
     const fullName = `${user.firstName}${user.lastName?.replace(/\s+/g, '') || ''}`;
     const displayId = customId || user.id.slice(-8).toUpperCase();
     const fileName = sanitize 
-      ? `${fullName}${displayId}_Shared__Profile.pdf`
-      : `${fullName}${displayId}_Watermarked__Profile.pdf`;
+      ? `${fullName}${displayId}_Sanitized__Profile.pdf`
+      : `${fullName}${displayId}_Profile.pdf`;
     
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=${fileName}`);
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
     
-    // Create PDF
-    const doc = new PDFDocument();
+    // Create PDF with A4 size
+    const doc = new PDFDocument({
+      size: 'A4',
+      margins: { top: 0, bottom: 0, left: 0, right: 0 }
+    });
+    
     doc.pipe(res);
     
     let y = 0;
-    let pageNum = 1;
     
     // ========== PAGE 1 ==========
-    y = addHeader(doc, 'User Profile Details');
+    y = addProfessionalHeader(doc, user, displayId, sanitize);
     
-    // Profile Photo
-    const pBuf = await fetchImage(profilePhotoUrl);
-    if (pBuf) { 
-      try { doc.image(pBuf, 40, y, { width: 80, height: 80 }); } catch {}
-    }
+    // ========== PERSONAL INFORMATION SECTION ==========
+    y = addSection(doc, 'Personal Information', y);
     
-    doc.fontSize(20).fillColor('#333').text(`${user.firstName} ${user.lastName}`.toUpperCase(), 130, y);
-    doc.fontSize(10).fillColor('#666').text(`ID: ${displayId}`, 130, y + 22);
-    doc.fillColor('#059669').text('✓ Verified', 130, y + 35);
+    y = addField(doc, 'Full Name:', `${user.firstName || ''} ${user.lastName || ''}`.trim(), 20, y);
+    y = addField(doc, 'Gender:', user.gender || 'Not provided', 20, y);
+    y = addField(doc, 'Date of Birth:', formatDate(user.dateOfBirth), 20, y);
+    y = addField(doc, 'Age:', user.age ? `${user.age} years` : 'Not provided', 20, y);
+    y = addField(doc, 'Blood Group:', user.bloodGroup || 'Not provided', 20, y);
+    y = addField(doc, 'Marital Status:', user.maritalStatus || 'Not provided', 20, y);
+    y = addField(doc, 'Religion:', user.religion || user.community || 'Not provided', 20, y);
+    y = addField(doc, 'Mother Tongue:', user.motherTongue || 'Not provided', 20, y);
+    y = addField(doc, 'Sub Caste:', user.subCaste || 'Not provided', 20, y);
+    y = addField(doc, 'Height:', user.height || 'Not provided', 20, y);
+    y = addField(doc, 'Weight:', user.weight ? `${user.weight} kg` : 'Not provided', 20, y);
+    y = addField(doc, 'Complexion:', user.complexion || 'Not provided', 20, y);
     
-    // Show subscription tier
-    const tier = user.subscriptionTier || 'FREE';
-    if (tier !== 'FREE') {
-      const tierLabel = tier === 'PREMIUM' ? '★ Premium' : tier === 'PRO' ? '★ Pro' : tier === 'BASIC' ? '★ Basic' : `★ ${tier}`;
-      doc.fillColor('#d97706').text(tierLabel, 130, y + 48);
-    }
+    // ========== CONTACT INFORMATION SECTION ==========
+    y = addSection(doc, 'Contact Information', y);
     
-    y = 200;
-    
-    // Contact Information
-    y = addSectionHeader(doc, 'Contact Information', y);
     if (sanitize) {
-      y = addField(doc, 'Email:', 'Hidden for privacy', 40, y);
-      y = addField(doc, 'Phone:', 'Hidden for privacy', 40, y);
+      y = addField(doc, 'Email:', 'Hidden for privacy', 20, y);
+      y = addField(doc, 'Phone:', 'Hidden for privacy', 20, y);
     } else {
-      y = addField(doc, 'Email:', user.email || 'Not provided', 40, y);
-      y = addField(doc, 'Phone:', user.phone || 'Not provided', 40, y);
+      y = addField(doc, 'Email:', user.email || 'Not provided', 20, y);
+      y = addField(doc, 'Phone:', user.phone || 'Not provided', 20, y);
     }
-    y = addField(doc, 'DOB / Age:', `${formatDate(user.dateOfBirth)} (${user.age} years)`, 40, y);
-    y = addField(doc, 'City:', user.city || 'Not provided', 40, y);
-    y = addField(doc, 'State:', user.state || 'Not provided', 40, y);
-    y = addField(doc, 'Country:', user.country || 'Not provided', 40, y);
+    y = addField(doc, 'City:', user.city || 'Not provided', 20, y);
+    y = addField(doc, 'State:', user.state || 'Not provided', 20, y);
+    y = addField(doc, 'Country:', user.country || 'India', 20, y);
     
-    // Personal Details
-    y = addSectionHeader(doc, 'Personal Details', y);
-    y = addField(doc, 'Gender:', user.gender || 'Not provided', 40, y);
-    y = addField(doc, 'Marital Status:', user.maritalStatus || 'Not provided', 40, y);
-    y = addField(doc, 'Community:', user.community || 'Not provided', 40, y);
-    y = addField(doc, 'Mother Tongue:', user.motherTongue || 'Not provided', 40, y);
-    y = addField(doc, 'Height:', user.height || 'Not provided', 40, y);
-    y = addField(doc, 'Health:', user.health || 'Not provided', 40, y);
+    // ========== FAMILY DETAILS SECTION ==========
+    y = addSection(doc, 'Family Details', y);
     
-    // Family Details
-    y = addSectionHeader(doc, 'Family Details', y);
-    y = addField(doc, 'Father Name:', user.fatherName || 'Not provided', 40, y);
-    y = addField(doc, 'Mother Name:', user.motherName || 'Not provided', 40, y);
-    y = addField(doc, 'Siblings:', user.siblings || 'Not provided', 40, y);
-    y = addField(doc, 'Family Type:', user.familyType || 'Not provided', 40, y);
-    y = addField(doc, 'Family Values:', user.familyValues || 'Not provided', 40, y);
+    if (sanitize) {
+      y = addField(doc, 'Family Details:', 'Hidden for privacy', 20, y);
+    } else {
+      y = addField(doc, 'Father Name:', user.fatherName || 'Not provided', 20, y);
+      y = addField(doc, 'Mother Name:', user.motherName || 'Not provided', 20, y);
+      y = addField(doc, 'Siblings:', user.siblings || 'Not provided', 20, y);
+      y = addField(doc, 'Family Type:', user.familyType || 'Not provided', 20, y);
+      y = addField(doc, 'Family Values:', user.familyValues || 'Not provided', 20, y);
+    }
     
-    // Add watermark on page 1 if not sanitized
+    // Add watermark on page 1
     if (!sanitize) {
-      doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
+      addWatermark(doc);
     }
     
     // ========== PAGE 2 ==========
     doc.addPage();
-    y = 40;
+    y = 20;
     
-    // Professional Details
-    y = addSectionHeader(doc, 'Professional Details', y);
-    y = addField(doc, 'Occupation:', user.occupation || 'Not provided', 40, y);
-    y = addField(doc, 'Employer:', user.employer || 'Not provided', 40, y);
-    y = addField(doc, 'Annual Income:', user.annualIncome || 'Not provided', 40, y);
-    y = addField(doc, 'Work Location:', user.workLocation || 'Not provided', 40, y);
+    // ========== EDUCATION & CAREER SECTION ==========
+    y = addSection(doc, 'Education & Career', y);
     
-    // Education
-    y = addSectionHeader(doc, 'Education Details', y);
-    y = addField(doc, 'Education:', user.education || 'Not provided', 40, y);
-    y = addField(doc, 'College:', user.college || 'Not provided', 40, y);
-    y = addField(doc, 'School:', user.school || 'Not provided', 40, y);
+    y = addField(doc, 'Education:', user.education || 'Not provided', 20, y);
+    y = addField(doc, 'Occupation:', user.occupation || 'Not provided', 20, y);
+    y = addField(doc, 'Employer:', user.employer || 'Not provided', 20, y);
+    y = addField(doc, 'Annual Income:', user.annualIncome || 'Not provided', 20, y);
+    y = addField(doc, 'Work Location:', user.workLocation || 'Not provided', 20, y);
+    y = addField(doc, 'Job Type:', user.jobType || 'Not provided', 20, y);
     
-    // Horoscope
-    y = addSectionHeader(doc, 'Horoscope Details', y);
-    y = addField(doc, 'Rasi:', user.rasi || 'Not provided', 40, y);
-    y = addField(doc, 'Natchathiram:', user.natchathiram || 'Not provided', 40, y);
-    y = addField(doc, 'Dosham:', user.dosham || 'None', 40, y);
+    // ========== HOROSCOPE DETAILS SECTION ==========
+    y = addSection(doc, 'Horoscope Details', y);
+    
+    y = addField(doc, 'Rashi:', user.rasi || 'Not provided', 20, y);
+    y = addField(doc, 'Natchathiram:', user.natchathiram || 'Not provided', 20, y);
+    y = addField(doc, 'Manglik/Dosham:', user.dosham || 'None', 20, y);
+    y = addField(doc, 'Birth Time:', user.birthTime || 'Not provided', 20, y);
+    y = addField(doc, 'Birth Place:', user.birthPlace || 'Not provided', 20, y);
+    
+    // ========== PARTNER PREFERENCES SECTION ==========
+    y = addSection(doc, 'Partner Preferences', y);
+    
+    y = addField(doc, 'Preferred Age:', user.preferredAge || 'Not specified', 20, y);
+    y = addField(doc, 'Preferred Height:', user.preferredHeight || 'Not specified', 20, y);
+    y = addField(doc, 'Preferred Education:', user.preferredEducation || 'Not specified', 20, y);
+    y = addField(doc, 'Preferred Occupation:', user.preferredOccupation || 'Not specified', 20, y);
+    y = addField(doc, 'Preferred Location:', user.preferredLocation || 'Not specified', 20, y);
+    
+    // ========== ABOUT ME SECTION ==========
+    if (user.aboutMe || user.bio) {
+      y = addSection(doc, 'About Me', y);
+      
+      doc.fontSize(9);
+      doc.fillColor(TEXT_COLOR);
+      doc.text(user.aboutMe || user.bio, 20, y, {
+        width: doc.internal.pageSize.getWidth() - 40,
+        align: 'justify'
+      });
+    }
     
     // Add watermark on page 2
     if (!sanitize) {
-      doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
+      addWatermark(doc);
     }
     
     // ========== GALLERY PAGES ==========
     if (gallery.length > 0) {
-      for (let i = 0; i < gallery.length; i += 3) {
-        doc.addPage();
-        y = 40;
-        
-        const pagePhotos = gallery.slice(i, i + 3);
-        y = addSectionHeader(doc, `Gallery Photos (${i + 1}-${Math.min(i + 3, gallery.length)})`, y);
-        
-        for (let j = 0; j < pagePhotos.length; j++) {
-          const imgBuf = await fetchImage(pagePhotos[j]);
-          if (imgBuf) {
-            try {
-              doc.image(imgBuf, 40 + (j * 180), y, { width: 160, height: 180 });
-            } catch {}
-          }
-        }
-        
-        y += 200;
-        
-        // Add watermark
-        if (!sanitize) {
-          doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
-        }
-      }
+      y = await addGalleryPage(doc, gallery, 20);
     }
     
     // ========== DOCUMENTS PAGE ==========
-    if (docs.length > 0) {
+    if (docs.length > 0 && !sanitize) {
       doc.addPage();
-      y = 40;
-      
-      y = addSectionHeader(doc, 'Documents', y);
+      y = addSection(doc, 'Documents', 20);
       
       for (const docItem of docs) {
-        y = addField(doc, 'Document:', docItem.documentType || 'Document', 40, y);
+        y = addField(doc, 'Document:', docItem.documentType || 'Document', 20, y);
         if (y > 700) {
           doc.addPage();
-          y = 40;
+          y = addSection(doc, 'Documents (Continued)', 20);
         }
       }
       
-      // Add watermark
-      if (!sanitize) {
-        doc.fontSize(40).fillColor('#ddd').text(WATERMARK_TEXT, 100, 300, { rotate: 45, align: 'center' });
-      }
+      addWatermark(doc);
     }
+    
+    // Add footer to all pages
+    addFooter(doc);
     
     // Finalize PDF
     doc.end();
