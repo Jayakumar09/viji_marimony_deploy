@@ -3,7 +3,7 @@ import axios from "axios";
 import "./ActivityLogs.css";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "http://localhost:5001";
+  process.env.REACT_APP_API_URL || 'https://viji-marimony-deploy-backend.onrender.com/api';
 
 // Date parsing utilities
 const parseDate = (dateStr) => {

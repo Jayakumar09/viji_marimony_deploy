@@ -330,26 +330,29 @@ const AdminUserProfile = () => {
     // If already a full URL (Cloudinary or external), return as-is
     if (url.startsWith('http')) return url;
     
+    // Production backend URL
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://viji-marimony-deploy-backend.onrender.com';
+    
     // If it's a file:// URL, extract the filename
     if (url.startsWith('file://')) {
       const filename = url.split('/').pop();
-      return `http://localhost:5001/uploads/${filename}`;
+      return `${backendUrl}/uploads/${filename}`;
     }
     
     // If contains Windows path
     if (url.includes('D:/') || url.includes('D:\\')) {
       const filename = url.split(/[\\/]/).pop();
-      return `http://localhost:5001/uploads/${filename}`;
+      return `${backendUrl}/uploads/${filename}`;
     }
     
     // If it's a path starting with /uploads/
     if (url.startsWith('/uploads/')) {
-      return `http://localhost:5001${url}`;
+      return `${backendUrl}${url}`;
     }
     
     // If it's just a filename
     if (!url.includes('/') && !url.includes('\\')) {
-      return `http://localhost:5001/uploads/${url}`;
+      return `${backendUrl}/uploads/${url}`;
     }
     
     // Otherwise use as-is

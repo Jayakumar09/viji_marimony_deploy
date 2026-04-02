@@ -26,7 +26,7 @@ const fetchImageAsBuffer = async (imageUrl) => {
     // Handle relative URLs - prepend server URL
     let url = imageUrl;
     if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('uploads/')) {
-      const serverUrl = process.env.SERVER_URL || 'https://viji-marimony-deploy-backend.onrender.com';
+      const serverUrl = process.env.SERVER_URL || 'http://localhost:5001';
       url = `${serverUrl}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
     }
     
@@ -52,7 +52,7 @@ const formatField = (doc, label, value, x, y, labelWidth = 130) => {
      .text(label, x, y, { width: labelWidth, continued: false });
   
   doc.fillColor('#1a1a1a')
-     .text(String(value), x + labelWidth, y, { width: 220 });
+     .text(String(value), x + labelWidth, y, { width: 240 });
   
   return y + 16;
 };
@@ -182,42 +182,9 @@ router.get('/download-profile/:id', authMiddleware, async (req, res) => {
          .text('Photo', photoX + 35, photoY + 45, { align: 'center' });
     }
 
-    // ========== PROFILE NAME SECTION ==========
+    // Profile name section removed
     let yPos = 100;
-    
-    const profileName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim();
-    doc.fontSize(22)
-       .fillColor('#1f2937')
-       .text(profileName || 'Profile', 40, yPos);
-    
-    yPos += 28;
-    
-    // Profile ID
-    doc.fontSize(10)
-       .fillColor('#6b7280')
-       .text(`Profile ID: ${profileIdShort}`, 40, yPos);
-    
-    yPos += 16;
-    
-    // Verification badges
-    let badgeX = 40;
-    if (profile.isVerified) {
-      doc.fontSize(9)
-         .fillColor('#059669')
-         .text('Verified', badgeX, yPos);
-      badgeX += 60;
-    }
-    if (profile.isPremium) {
-      const tier = profile.subscriptionTier || 'PREMIUM';
-      const tierLabel = tier === 'PREMIUM' ? 'Premium Member' : tier === 'PRO' ? 'Pro Member' : tier === 'BASIC' ? 'Basic Member' : `${tier} Member`;
-      doc.fontSize(9)
-         .fillColor('#d97706')
-         .text(tierLabel, badgeX, yPos);
-    }
-
-    yPos = 180;
-
-    // ========== PERSONAL INFORMATION ==========
+    yPos = 300;
     doc.fontSize(14)
        .fillColor('#8B5CF6')
        .text('Personal Information', 40, yPos);
@@ -228,19 +195,19 @@ router.get('/download-profile/:id', authMiddleware, async (req, res) => {
        .lineWidth(2)
        .stroke();
     
-    yPos = 205;
+    yPos = 345;
     
     yPos = formatField(doc, 'Full Name:', `${profile.firstName || ''} ${profile.lastName || ''}`.trim(), 40, yPos);
     yPos = formatField(doc, 'Gender:', profile.gender, 40, yPos);
     yPos = formatField(doc, 'Age:', profile.age ? `${profile.age} years` : '', 40, yPos);
     yPos = formatField(doc, 'Date of Birth:', profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString('en-IN') : '', 40, yPos);
     yPos = formatField(doc, 'Marital Status:', profile.maritalStatus, 40, yPos);
-    yPos = formatField(doc, 'Height:', profile.height ? `${profile.height} cm` : '', 280, yPos - 16);
+    yPos = formatField(doc, 'Height:', profile.height ? `${profile.height} cm` : '', 280, yPos);
     yPos = formatField(doc, 'Weight:', profile.weight ? `${profile.weight} kg` : '', 280, yPos);
     yPos = formatField(doc, 'Complexion:', profile.complexion, 40, yPos);
 
     // ========== COMMUNITY ==========
-    yPos += 20;
+    yPos += 30;
     doc.fontSize(14)
        .fillColor('#8B5CF6')
        .text('Community & Religion', 40, yPos);
@@ -253,10 +220,10 @@ router.get('/download-profile/:id', authMiddleware, async (req, res) => {
     
     yPos += 30;
     yPos = formatField(doc, 'Community:', profile.community, 40, yPos);
-    yPos = formatField(doc, 'Sub Caste:', profile.subCaste || 'Not specified', 280, yPos - 16);
+    yPos = formatField(doc, 'Sub Caste:', profile.subCaste || 'Not specified', 280, yPos);
 
     // ========== LOCATION ==========
-    yPos += 20;
+    yPos += 30;
     doc.fontSize(14)
        .fillColor('#8B5CF6')
        .text('Location Details', 40, yPos);
@@ -269,11 +236,11 @@ router.get('/download-profile/:id', authMiddleware, async (req, res) => {
     
     yPos += 30;
     yPos = formatField(doc, 'City:', profile.city, 40, yPos);
-    yPos = formatField(doc, 'State:', profile.state, 280, yPos - 16);
+    yPos = formatField(doc, 'State:', profile.state, 280, yPos);
     yPos = formatField(doc, 'Country:', profile.country || 'India', 40, yPos);
 
     // ========== EDUCATION & CAREER ==========
-    yPos += 20;
+    yPos += 30;
     doc.fontSize(14)
        .fillColor('#8B5CF6')
        .text('Education & Career', 40, yPos);
@@ -286,11 +253,11 @@ router.get('/download-profile/:id', authMiddleware, async (req, res) => {
     
     yPos += 30;
     yPos = formatField(doc, 'Education:', profile.education || 'Not specified', 40, yPos);
-    yPos = formatField(doc, 'Profession:', profile.profession || 'Not specified', 280, yPos - 16);
+    yPos = formatField(doc, 'Profession:', profile.profession || 'Not specified', 280, yPos);
     yPos = formatField(doc, 'Annual Income:', profile.income || 'Not specified', 40, yPos);
 
     // ========== FAMILY DETAILS ==========
-    yPos += 20;
+    yPos += 30;
     doc.fontSize(14)
        .fillColor('#8B5CF6')
        .text('Family Details', 40, yPos);
@@ -303,13 +270,13 @@ router.get('/download-profile/:id', authMiddleware, async (req, res) => {
     
     yPos += 30;
     yPos = formatField(doc, 'Father Name:', profile.fatherName || 'Not specified', 40, yPos);
-    yPos = formatField(doc, 'Father Occupation:', profile.fatherOccupation || 'Not specified', 280, yPos - 16);
+    yPos = formatField(doc, 'Father Occupation:', profile.fatherOccupation || 'Not specified', 280, yPos);
     yPos = formatField(doc, 'Mother Name:', profile.motherName || 'Not specified', 40, yPos);
-    yPos = formatField(doc, 'Mother Occupation:', profile.motherOccupation || 'Not specified', 280, yPos - 16);
+    yPos = formatField(doc, 'Mother Occupation:', profile.motherOccupation || 'Not specified', 280, yPos);
     yPos = formatField(doc, 'Family Values:', profile.familyValues || 'Not specified', 40, yPos);
 
     // ========== HOROSCOPE ==========
-    yPos += 20;
+    yPos += 30;
     doc.fontSize(14)
        .fillColor('#8B5CF6')
        .text('Horoscope Details', 40, yPos);
@@ -322,13 +289,13 @@ router.get('/download-profile/:id', authMiddleware, async (req, res) => {
     
     yPos += 30;
     yPos = formatField(doc, 'Raasi:', profile.raasi || 'Not specified', 40, yPos);
-    yPos = formatField(doc, 'Nakshatra:', profile.natchathiram || 'Not specified', 280, yPos - 16);
+    yPos = formatField(doc, 'Nakshatra:', profile.natchathiram || 'Not specified', 280, yPos);
     yPos = formatField(doc, 'Dhosam:', profile.dhosam || 'None', 40, yPos);
-    yPos = formatField(doc, 'Birth Time:', profile.birthTime || 'Not specified', 280, yPos - 16);
+    yPos = formatField(doc, 'Birth Time:', profile.birthTime || 'Not specified', 280, yPos);
     yPos = formatField(doc, 'Birth Place:', profile.birthPlace || 'Not specified', 40, yPos);
 
     // ========== ABOUT ==========
-    yPos += 20;
+    yPos += 30;
     doc.fontSize(14)
        .fillColor('#8B5CF6')
        .text('About', 40, yPos);
@@ -531,12 +498,9 @@ router.get('/share/:id', async (req, res) => {
       profile.photos = [];
     }
 
-    // Prepare profile name and ID for filename
     const fullName = `${profile.firstName || ''}${profile.lastName || ''}`.replace(/\s+/g, '');
-    const profileIdShort = profile.id.slice(-6).toUpperCase();
-    const fileName = sanitize 
-      ? `${fullName}${profileIdShort}_Shared__Profile.pdf`
-      : `${fullName}${profileIdShort}_Profile.pdf`;
+    const profileIdShort = profile.customId || profile.id.slice(-6).toUpperCase();
+    const fileName = `${profileIdShort}_Profile.pdf`;
 
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
@@ -611,7 +575,7 @@ router.get('/share/:id', async (req, res) => {
     const addField = (doc, label, value, x, y, w = 130) => {
       if (!value || value === 'Not provided') return y;
       doc.fontSize(10).fillColor('#64748b').text(label, x, y, { width: w });
-      doc.fillColor('#1e293b').text(String(value), x + w, y, { width: 220 });
+      doc.fillColor('#1e293b').text(String(value), x + w, y, { width: 240 });
       return y + 14;
     };
 
@@ -676,8 +640,9 @@ router.get('/share/:id', async (req, res) => {
       } catch {} 
     }
 
+    const displayId = profile.customId || profile.id.slice(-8).toUpperCase();
     doc.fontSize(20).fillColor('#333').text(`${profile.firstName || ''} ${profile.lastName || ''}`.toUpperCase(), 130, y);
-    doc.fontSize(10).fillColor('#666').text(`ID: ${profile.id?.slice(-8)}`, 130, y + 22);
+    doc.fontSize(10).fillColor('#666').text(`ID: ${displayId}`, 130, y + 22);
     doc.fillColor('#059669').text('✓ Verified', 130, y + 35);
     
     // Show actual subscription tier
@@ -697,7 +662,7 @@ router.get('/share/:id', async (req, res) => {
       y = addField(doc, 'Email:', profile.email || 'Not provided', 40, y);
       y = addField(doc, 'Phone:', profile.phone || 'Not provided', 40, y);
     }
-    y = addField(doc, 'DOB / Age:', `${formatDate(profile.dateOfBirth)} (${profile.age} years)`, 40, y);
+    y = addField(doc, 'DOB / Age:', sanitize ? `${profile.age} years` : `${formatDate(profile.dateOfBirth)} (${profile.age} years)`, 40, y);
     
     y = addSectionHeader(doc, 'Location', y);
     y = addField(doc, 'City:', profile.city, 40, y);
@@ -727,13 +692,15 @@ router.get('/share/:id', async (req, res) => {
     y = addField(doc, 'Profession:', profile.profession || 'Not provided', 40, y);
     y = addField(doc, 'Income:', profile.income || 'Not provided', 40, y);
     
-    y = addSectionHeader(doc, 'Family Details', y);
-    y = addField(doc, 'Father Name:', profile.fatherName || 'Not provided', 40, y);
-    y = addField(doc, 'Father Occupation:', profile.fatherOccupation || 'Not provided', 40, y);
-    y = addField(doc, 'Mother Name:', profile.motherName || 'Not provided', 40, y);
-    y = addField(doc, 'Mother Occupation:', profile.motherOccupation || 'Not provided', 40, y);
-    y = addField(doc, 'Family Values:', profile.familyValues || 'Not provided', 40, y);
-    y = addField(doc, 'About Family:', profile.aboutFamily || 'Not provided', 40, y);
+    if (!sanitize) {
+      y = addSectionHeader(doc, 'Family Details', y);
+      y = addField(doc, 'Father Name:', profile.fatherName || 'Not provided', 40, y);
+      y = addField(doc, 'Father Occupation:', profile.fatherOccupation || 'Not provided', 40, y);
+      y = addField(doc, 'Mother Name:', profile.motherName || 'Not provided', 40, y);
+      y = addField(doc, 'Mother Occupation:', profile.motherOccupation || 'Not provided', 40, y);
+      y = addField(doc, 'Family Values:', profile.familyValues || 'Not provided', 40, y);
+      y = addField(doc, 'About Family:', profile.aboutFamily || 'Not provided', 40, y);
+    }
     
     y = addSectionHeader(doc, 'Horoscope Details', y);
     y = addField(doc, 'Raasi:', profile.raasi || 'Not provided', 40, y);

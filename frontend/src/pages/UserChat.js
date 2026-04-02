@@ -252,8 +252,9 @@ const UserChat = () => {
   const getImageUrl = (url) => {
     if (!url) return null;
     if (url.startsWith('http')) return url;
-    // Backend is running on port 5001
-    return `http://localhost:5001${url}`;
+    // Use production backend URL
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://viji-marimony-deploy-backend.onrender.com';
+    return `${backendUrl}${url}`;
   };
 
   if (loading) {

@@ -2,22 +2,65 @@ const { prisma } = require('../utils/database');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Configure multer for chat image uploads
-const chatStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/chat');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `chat_${req.user?.id || req.admin?.id}_${uniqueSuffix}${ext}`);
-  }
+// Check if Cloudinary is configured
+const isCloudinaryConfigured = () => {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  
+  if (!cloudName || !apiKey || !apiSecret) return false;
+  
+  const isPlaceholder = apiSecret.includes('your_') || 
+                       apiSecret.includes('_here') ||
+                       apiSecret.length < 10;
+  
+  return !isPlaceholder;
+};
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Configure multer for chat image uploads - Use Cloudinary for production
+let chatStorage;
+if (isCloudinaryConfigured()) {
+  chatStorage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'boyar-matrimony/chat',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+      transformation: [
+        { width: 1000, height: 1000, crop: 'limit' },
+        { quality: 'auto:good' },
+        { fetch_format: 'auto' }
+      ],
+    },
+  });
+  console.log('📁 Chat uploads: Using Cloudinary');
+} else {
+  // Fallback to local storage (should not happen in production)
+  chatStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(__dirname, '../uploads/chat');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(file.originalname);
+      cb(null, `chat_${req.user?.id || req.admin?.id}_${uniqueSuffix}${ext}`);
+    }
+  });
+  console.log('⚠️ Chat uploads: Using local storage (Cloudinary not configured)');
+}
 
 const chatUpload = multer({
   storage: chatStorage,
@@ -47,8 +90,8 @@ const sendUserMessage = async (req, res) => {
         return res.status(400).json({ error: 'Image file is required for image messages' });
       }
       
-      // Create image URL
-      const imageUrl = `/uploads/chat/${req.file.filename}`;
+      // Create image URL - Cloudinary returns URL in req.file.path
+      const imageUrl = (isCloudinaryConfigured() && req.file?.path) ? req.file.path : `/uploads/chat/${req.file.filename}`;
       
       const chatMessage = await prisma.chatMessage.create({
         data: {
@@ -118,8 +161,8 @@ const sendAdminMessage = async (req, res) => {
         return res.status(400).json({ error: 'Image file is required for image messages' });
       }
       
-      // Create image URL
-      const imageUrl = `/uploads/chat/${req.file.filename}`;
+      // Create image URL - Cloudinary returns URL in req.file.path
+      const imageUrl = (isCloudinaryConfigured() && req.file?.path) ? req.file.path : `/uploads/chat/${req.file.filename}`;
       
       const chatMessage = await prisma.chatMessage.create({
         data: {

@@ -115,7 +115,7 @@ const ManualPayment = () => {
         if (bankRes.success) setBankDetails(bankRes.bankDetails);
         if (upiRes.success) {
           // Build full URL for QR code
-          const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+          const apiBaseUrl = process.env.REACT_APP_API_URL || 'https://viji-marimony-deploy-backend.onrender.com/api';
           const qrCodeUrl = upiRes.upiDetails.qrCodeUrl.startsWith('http') 
             ? upiRes.upiDetails.qrCodeUrl 
             : `${apiBaseUrl.replace('/api', '')}${upiRes.upiDetails.qrCodeUrl}`;

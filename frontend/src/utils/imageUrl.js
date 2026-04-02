@@ -1,5 +1,5 @@
 // Backend URL for image serving
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5001';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://viji-marimony-deploy-backend.onrender.com';
 
 // Helper to construct full image URLs via backend
 export const getImageUrl = (imagePath) => {
