@@ -242,7 +242,7 @@ router.get('/:userId', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename=${fileName}`);
     
-    const doc = new PDFDocument();
+    const doc = new PDFDocument({ size: 'A4', margin: 0 });
     doc.pipe(res);
     
     let y = 0;
