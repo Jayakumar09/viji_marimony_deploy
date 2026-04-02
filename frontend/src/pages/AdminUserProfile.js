@@ -47,6 +47,25 @@ function TabPanel(props) {
  * AdminUserProfile Component
  * Displays complete user profile for admin verification
  */
+
+// Document type labels helper
+const getDocumentTypeLabel = (docType) => {
+  const labels = {
+    'GOVERNMENT_ID': 'Government ID (Masked Aadhaar - last 4 digits, PAN, Passport, Driving License)',
+    'PHOTO_ID': 'Photo ID Proof (Live Selfie)',
+    'AGE_PROOF': 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)',
+    'BIRTH_CERTIFICATE': 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)',
+    'EDUCATION_CERTIFICATE': 'Education Certificate (Degree/Diploma Certificates)',
+    'EMPLOYMENT_PROOF': 'Employment Proof (Offer Letter / Company ID / Experience Letter)',
+    'FINANCIAL_PROOF': 'Financial Verification (Bank Statement/ITR)',
+    'ADDRESS_PROOF': 'Proof of Current Address (Voter ID, Rent Agreement, Utility Bills)',
+    'MARITAL_STATUS_PROOF': 'Marital Status Proof (Divorce Decree / Death Certificate)',
+    'CASTE_CERTIFICATE': 'Caste Certificate (Optional)',
+    'OTHER': 'Other Documents (if any)'
+  };
+  return labels[docType] || docType;
+};
+
 const AdminUserProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -849,7 +868,7 @@ const AdminUserProfile = () => {
                   <TableBody>
                     {documents.map((doc) => (
                       <TableRow key={doc.id}>
-                        <TableCell sx={{ color: 'white' }}>{doc.documentType}</TableCell>
+                        <TableCell sx={{ color: 'white' }}>{getDocumentTypeLabel(doc.documentType)}</TableCell>
                         <TableCell sx={{ color: 'white' }}>{doc.fileName || 'N/A'}</TableCell>
                         <TableCell>
                           <Chip 

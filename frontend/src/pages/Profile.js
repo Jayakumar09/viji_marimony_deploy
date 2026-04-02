@@ -80,13 +80,13 @@ import {
 } from './ProfileSections';
 
 const DOCUMENT_TYPES = [
-  { id: 'GOVERNMENT_ID', label: 'Government ID (Aadhaar, PAN, etc.)', required: true },
-  { id: 'ADDRESS_PROOF', label: 'Proof of Current Address', required: true },
+  { id: 'GOVERNMENT_ID', label: 'Government ID (Masked Aadhaar - last 4 digits, PAN, Passport, Driving License)', required: true },
+  { id: 'ADDRESS_PROOF', label: 'Proof of Current Address (Voter ID, Rent Agreement, Utility Bills)', required: true },
   { id: 'FINANCIAL_PROOF', label: 'Financial Verification (Bank Statement/ITR)', required: true },
-  { id: 'PHOTO_ID', label: 'Photo ID Proof', required: true },
-  { id: 'BIRTH_CERTIFICATE', label: 'Birth Certificate', required: false },
-  { id: 'EDUCATION_CERTIFICATE', label: 'Education Certificate', required: false },
-  { id: 'OTHER', label: 'Other Documents', required: false }
+  { id: 'PHOTO_ID', label: 'Photo ID Proof (Live Selfie)', required: true },
+  { id: 'BIRTH_CERTIFICATE', label: 'Birth Certificate (Birth Certificate or 10th/12th School Certificates)', required: false },
+  { id: 'EDUCATION_CERTIFICATE', label: 'Education Certificate (Degree/Diploma Certificates)', required: false },
+  { id: 'OTHER', label: 'Other Documents (if any)', required: false }
 ];
 
 const PROFESSION_OPTIONS = [
