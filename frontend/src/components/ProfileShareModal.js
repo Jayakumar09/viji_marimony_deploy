@@ -380,7 +380,7 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
     try {
       const isSanitized = shareOption === 'other';
       
-      // Download PDF
+      // Download PDF first
       let pdfBlob;
       try {
         pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
@@ -388,8 +388,30 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         pdfBlob = getProfilePDFBlob(profileData, isSanitized);
       }
       
-      // Use mailto + download PDF fallback (skip slow SMTP API)
-      await openMailtoWithPdf(email, profileName, pdfBlob);
+      // Send email via backend SMTP API
+      const formData = new FormData();
+      formData.append('pdf', pdfBlob, `${profileName.replace(/\s+/g, '_')}_Profile.pdf`);
+      formData.append('email', email);
+      formData.append('profileName', profileName);
+      formData.append('shareType', shareOption);
+
+      console.log('[Email Share] Sending email to:', email);
+      
+      const response = await api.post('/admin/share-profile-email', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000 // 30 seconds for email
+      });
+      
+      console.log('[Email Share] Response:', response.data);
+      
+      // Check if backend returned fallback (SMTP not configured)
+      if (response.data?.fallback) {
+        // SMTP not configured, use mailto fallback
+        await openMailtoWithPdf(email, profileName, pdfBlob);
+        toast.success('SMTP not configured. Email client opened! Please send manually.');
+      } else {
+        toast.success(`Email sent successfully to ${email}!`);
+      }
       
       await logActivity('SHARE_PROFILE_EMAIL', {
         userId: userId,
@@ -397,16 +419,32 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         userName: profileData?.firstName,
         shareType: shareOption,
         recipientEmail: email,
-        method: 'mailto_opened',
-        status: 'Pending - User action required',
+        method: response.data?.fallback ? 'mailto_fallback' : 'smtp_direct',
         timestamp: new Date().toISOString()
       });
       
       setEmail('');
-      toast.success('Email client opened! Please click Send in your email.');
     } catch (error) {
       console.error('Email share error:', error);
-      toast.error('Failed to share. Please try again.');
+      
+      // Fallback to mailto if API fails
+      try {
+        const isSanitized = shareOption === 'other';
+        let pdfBlob;
+        try {
+          pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
+        } catch {
+          pdfBlob = getProfilePDFBlob(profileData, isSanitized);
+        }
+        
+        await openMailtoWithPdf(email, profileName, pdfBlob);
+        toast.success('Email service unavailable. Please send manually from email client.');
+      } catch {
+        toast.error('Failed to send email. Please try again.');
+      }
+      
+      setEmail('');
+    } finally {
       setEmailLoading(false);
     }
   };
