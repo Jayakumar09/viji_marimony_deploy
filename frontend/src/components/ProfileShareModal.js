@@ -397,12 +397,13 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         userName: profileData?.firstName,
         shareType: shareOption,
         recipientEmail: email,
-        method: 'mailto_with_pdf',
+        method: 'mailto_opened',
+        status: 'Pending - User action required',
         timestamp: new Date().toISOString()
       });
       
       setEmail('');
-      toast.success('Email ready! PDF downloaded. Please send email.');
+      toast.success('Email client opened! Please click Send in your email.');
     } catch (error) {
       console.error('Email share error:', error);
       toast.error('Failed to share. Please try again.');

@@ -157,22 +157,23 @@ router.post('/share-profile-email', upload.single('pdf'), async (req, res) => {
     
     // Get SMTP settings from environment
     const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const smtpPort = process.env.SMTP_PORT || 587;
+    const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
     const smtpUser = process.env.EMAIL_USER || process.env.BUSINESS_EMAIL_USER;
     const smtpPass = process.env.EMAIL_PASS || process.env.BUSINESS_EMAIL_PASS;
     const fromEmail = process.env.FROM_EMAIL || process.env.BUSINESS_EMAIL_USER;
     
+    console.log('[Email Share] Attempting to send email to:', email);
+    console.log('[Email Share] SMTP configured:', !!smtpUser, 'Host:', smtpHost);
+    
     // If SMTP is not configured, return fallback message
-    if (!smtpUser || !smtpPass) {
-      console.log('SMTP not configured, returning fallback');
+    if (!smtpUser || !smtpPass || smtpUser === 'your-email@gmail.com') {
+      console.log('[Email Share] SMTP not configured, returning fallback');
       return res.json({ 
         success: true, 
         message: 'Email service not configured. Please use the mailto link to send email.',
         fallback: true
       });
     }
-    
-    console.log('Using SMTP:', smtpHost, 'From:', fromEmail);
     
     // Create transporter
     const transporter = nodemailer.createTransport({
@@ -182,8 +183,25 @@ router.post('/share-profile-email', upload.single('pdf'), async (req, res) => {
       auth: {
         user: smtpUser,
         pass: smtpPass
-      }
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000
     });
+    
+    // Verify SMTP connection first
+    try {
+      await transporter.verify();
+      console.log('[Email Share] SMTP connection verified');
+    } catch (verifyError) {
+      console.error('[Email Share] SMTP verification failed:', verifyError.message);
+      return res.json({
+        success: true,
+        message: 'Email service unavailable. Please use the mailto link.',
+        fallback: true,
+        error: 'SMTP connection failed'
+      });
+    }
     
     const sanitizedText = shareType === 'other' ? '(Sanitized - Private info hidden)' : '(Full Profile)';
     
@@ -215,17 +233,22 @@ router.post('/share-profile-email', upload.single('pdf'), async (req, res) => {
     }
     
     // Send email
-    await transporter.sendMail(mailOptions);
-    
-    console.log('Profile email sent successfully to:', email);
+    const info = await transporter.sendMail(mailOptions);
+    console.log('[Email Share] Email sent successfully. MessageId:', info.messageId);
+    console.log('[Email Share] Response:', info.response);
     
     res.json({ 
       success: true, 
-      message: `Profile sent to ${email}` 
+      message: `Profile sent to ${email}`,
+      messageId: info.messageId
     });
   } catch (error) {
-    console.error('Share profile email error:', error);
-    res.status(500).json({ error: 'Failed to send email: ' + error.message });
+    console.error('[Email Share] Error:', error.code, error.message);
+    console.error('[Email Share] Full error:', error);
+    res.status(500).json({ 
+      error: 'Failed to send email: ' + error.message,
+      fallback: true
+    });
   }
 });
 
