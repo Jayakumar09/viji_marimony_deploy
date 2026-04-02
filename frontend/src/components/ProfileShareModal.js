@@ -104,6 +104,7 @@ const openMailtoWithPdf = async (email, profileName, pdfBlob) => {
 const ProfileShareModal = ({ open, onClose, userId, userName }) => {
   const [shareOption, setShareOption] = useState('myself');
   const [email, setEmail] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
@@ -264,54 +265,46 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
     }
   };
 
-  // Generate and copy shareable link
+  // Send WhatsApp direct message with PDF link
   const handleWhatsAppShare = async () => {
+    if (!whatsappNumber) {
+      toast.error('Please enter WhatsApp number');
+      return;
+    }
+
+    // Clean the WhatsApp number
+    let cleanNumber = whatsappNumber.replace(/[\s\-\(\)]/g, '');
+    if (cleanNumber.startsWith('+')) {
+      cleanNumber = cleanNumber.substring(1);
+    }
+    if (cleanNumber.startsWith('91') && cleanNumber.length > 10) {
+      cleanNumber = cleanNumber.substring(2);
+    }
+
+    if (cleanNumber.length < 10) {
+      toast.error('Please enter a valid WhatsApp number');
+      return;
+    }
+
     if (!profileData) {
       toast.error('Profile data not loaded');
       return;
     }
-    
+
     setWhatsappLoading(true);
     const isSanitized = shareOption === 'other';
-    
+
     try {
-      // Download PDF first
-      let pdfBlob;
-      try {
-        pdfBlob = await profileService.downloadProfilePdf(userId, isSanitized);
-      } catch (error) {
-        console.error('PDF download error:', error);
-        pdfBlob = getProfilePDFBlob(profileData, isSanitized);
-      }
-      
-      // Save PDF to user's device
+      const baseUrl = 'https://vijayalakshmimarriage.com';
+      const pdfLink = `${baseUrl}/api/shared-profile/${userId}?sanitize=${isSanitized}`;
+      const profileLink = `${baseUrl}/profile/${userId}?sanitize=${isSanitized}`;
+
       const firstName = profileData.firstName || '';
       const lastName = profileData.lastName || '';
-      const customId = profileData.customId;
-      let filename;
-      if (customId && customId.length > 0 && customId.length < 30) {
-        filename = `${customId}_Profile.pdf`;
-      } else {
-        const cleanName = `${firstName}${lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1) : ''}`.replace(/\s+/g, '');
-        filename = cleanName ? `${cleanName}_Profile.pdf` : `Profile_${userId.slice(-8).toUpperCase()}_Profile.pdf`;
-      }
-      
-      const url = window.URL.createObjectURL(new Blob([pdfBlob]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      // Build WhatsApp share message
-      const baseUrl = 'https://vijayalakshmimarriage.com';
-      const profileLink = `${baseUrl}/profile/${userId}?sanitize=${isSanitized}`;
       const name = `${firstName} ${lastName}`.trim();
-      
+
       let shareMessage = `💍 *${name}'s Profile - Vijayalakshmi Boyar Matrimony*\n\n`;
-      
+
       if (profileData.age) shareMessage += `👤 Age: ${profileData.age} years\n`;
       if (profileData.gender) shareMessage += `⚥ Gender: ${profileData.gender}\n`;
       if (profileData.height) shareMessage += `📏 Height: ${profileData.height}\n`;
@@ -322,18 +315,16 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
       if (profileData.profession) shareMessage += `💼 Profession: ${profileData.profession}\n`;
       if (profileData.city || profileData.state) shareMessage += `📍 Location: ${[profileData.city, profileData.state].filter(Boolean).join(', ')}\n`;
       if (profileData.maritalStatus) shareMessage += `💍 Marital Status: ${profileData.maritalStatus}\n`;
-      
+
       shareMessage += `\n✨ *Vijayalakshmi Boyar Matrimony*\n`;
       shareMessage += `\n🔗 View Profile: ${profileLink}\n`;
-      shareMessage += `📎 PDF has been downloaded! Please attach it to your WhatsApp message.\n\n`;
+      shareMessage += `📄 *Download PDF:* ${pdfLink}\n\n`;
       shareMessage += `Regards,\nVijayalakshmi Boyar Matrimony`;
-      
-      // Open WhatsApp after a short delay
-      setTimeout(() => {
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
-        window.open(whatsappUrl, '_blank');
-      }, 500);
-      
+
+      // Open WhatsApp with direct message
+      const whatsappUrl = `https://wa.me/91${cleanNumber}?text=${encodeURIComponent(shareMessage)}`;
+      window.open(whatsappUrl, '_blank');
+
       // Log activity
       await logActivity('SHARE_PROFILE_WHATSAPP', {
         userId: userId,
@@ -341,13 +332,15 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
         userName: profileData?.firstName,
         shareType: shareOption,
         recipientType: 'whatsapp',
+        recipientNumber: `91${cleanNumber}`,
         timestamp: new Date().toISOString()
       });
-      
-      toast.success('PDF downloaded! WhatsApp opened to send.');
+
+      toast.success('WhatsApp opened with profile message!');
+      setWhatsappNumber('');
     } catch (error) {
       console.error('WhatsApp share error:', error);
-      toast.error('Failed to share. Please try downloading the PDF manually.');
+      toast.error('Failed to share. Please try again.');
     } finally {
       setWhatsappLoading(false);
     }
@@ -454,6 +447,7 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
   const handleClose = () => {
     setShareOption('myself');
     setEmail('');
+    setWhatsappNumber('');
     setPreviewMode(false);
     onClose();
   };
@@ -673,29 +667,6 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
 
             {/* Share Actions */}
             <Grid container spacing={2}>
-              {/* Download PDF & Share via WhatsApp */}
-              <Grid item xs={12}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={whatsappLoading ? <CircularProgress size={20} /> : <WhatsApp />}
-                  onClick={handleWhatsAppShare}
-                  disabled={whatsappLoading || !profileData}
-                  sx={{
-                    py: 1.5,
-                    borderRadius: 2,
-                    bgcolor: '#25D366',
-                    color: 'white',
-                    '&:hover': { bgcolor: '#128C7E' }
-                  }}
-                >
-                  📎 Download PDF & Share via WhatsApp
-                </Button>
-                <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary', textAlign: 'center' }}>
-                  Downloads PDF first, then opens WhatsApp to attach
-                </Typography>
-              </Grid>
-
               {/* Download PDF */}
               <Grid item xs={12} sm={6}>
                 <Button
@@ -716,6 +687,26 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                 </Button>
               </Grid>
 
+              {/* WhatsApp Share */}
+              <Grid item xs={12} sm={6}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={whatsappLoading ? <CircularProgress size={20} /> : <WhatsApp />}
+                  onClick={handleWhatsAppShare}
+                  disabled={whatsappLoading || !profileData}
+                  sx={{
+                    py: 1.5,
+                    borderRadius: 2,
+                    borderColor: '#25D366',
+                    color: '#25D366',
+                    '&:hover': { borderColor: '#128C7E', bgcolor: 'rgba(37, 211, 102, 0.04)' }
+                  }}
+                >
+                  Share via WhatsApp
+                </Button>
+              </Grid>
+
               {/* Email Share */}
               <Grid item xs={12} sm={6}>
                 <Button
@@ -732,10 +723,55 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                     '&:hover': { borderColor: '#C5221F', bgcolor: 'rgba(234, 67, 53, 0.04)' }
                   }}
                 >
-                  Email
+                  Share via Email
                 </Button>
               </Grid>
             </Grid>
+
+            {/* WhatsApp Number Input */}
+            <Box sx={{ mt: 2 }}>
+              <TextField
+                id="whatsapp-input"
+                fullWidth
+                type="tel"
+                label="Enter WhatsApp number to share directly"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                disabled={whatsappLoading}
+                size="small"
+                placeholder="Enter 10-digit mobile number"
+                sx={{
+                  '& .MuiOutlinedInput-root': { borderRadius: 2 }
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 1, color: '#25D366' }}>
+                      <WhatsApp />
+                    </Box>
+                  ),
+                  endAdornment: (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={handleWhatsAppShare}
+                      disabled={whatsappLoading || !whatsappNumber}
+                      sx={{
+                        bgcolor: '#25D366',
+                        '&:hover': { bgcolor: '#128C7E' },
+                        borderRadius: 1,
+                        minWidth: 'auto',
+                        px: 2
+                      }}
+                    >
+                      Send
+                    </Button>
+                  )
+                }}
+              />
+              <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                Enter mobile number with country code (e.g., 9876543210)
+              </Typography>
+            </Box>
 
             {/* Email Input */}
             <Box sx={{ mt: 2 }}>
@@ -746,18 +782,23 @@ const ProfileShareModal = ({ open, onClose, userId, userName }) => {
                 label="Enter email address to share"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
+                disabled={emailLoading}
                 size="small"
                 sx={{
                   '& .MuiOutlinedInput-root': { borderRadius: 2 }
                 }}
                 InputProps={{
+                  startAdornment: (
+                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 1, color: '#EA4335' }}>
+                      <Email />
+                    </Box>
+                  ),
                   endAdornment: (
                     <Button
                       size="small"
                       variant="contained"
                       onClick={handleEmailShare}
-                      disabled={loading || !email}
+                      disabled={emailLoading || !email}
                       sx={{
                         bgcolor: '#8B5CF6',
                         '&:hover': { bgcolor: '#7C3AED' },
