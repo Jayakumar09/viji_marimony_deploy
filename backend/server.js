@@ -172,6 +172,7 @@ const chatRoutes = require('./routes/chat');
 const profilePdfRoutes = require('./routes/profilePdf');
 const activityLogsModule = require('./modules/ActivityLogs/ActivityLogs');
 const generateSharedProfile = require('./routes/generateSharedProfile');
+const backupRoutes = require('./routes/backup');
 
 // SSE Service for real-time updates
 const sseService = require('./services/sseService');
@@ -233,6 +234,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/profile-pdf', profilePdfRoutes);
 app.use('/api/activity-logs', activityLogsModule.router);
 app.use('/api/shared-profile', generateSharedProfile);
+app.use('/api/admin/backup', backupRoutes);
 
 // ============================================
 // SSE endpoint for real-time updates
@@ -383,6 +385,19 @@ async function startServer() {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`📧 Admin contact: vijayalakshmijayakumar45@gmail.com`);
         console.log(`🏠 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+        
+        // Initialize Backup Scheduler
+        try {
+          const backupScheduler = require('./services/backupScheduler');
+          backupScheduler.startScheduler();
+          const schedulerStatus = backupScheduler.getSchedulerStatus();
+          console.log(`💾 Backup Scheduler: ${schedulerStatus.running ? 'Running' : 'Disabled'}`);
+          if (schedulerStatus.running) {
+            console.log(`   Schedule: ${schedulerStatus.schedule} (${schedulerStatus.timezone})`);
+          }
+        } catch (backupError) {
+          console.log(`⚠️  Backup Scheduler: ${backupError.message}`);
+        }
         
         // Initialize AI Verification Services
         try {

@@ -15,7 +15,7 @@ import {
   MoreVert, Block, Check, Close, Star, Email, Phone, LocationOn,
   CalendarToday, VerifiedUser,PendingActions, History, AttachMoney, Edit, Chat,
   Send as SendIcon, Delete as DeleteIcon, Image as ImageIcon, Share,
-  Person, Payment, Login
+  Person, Payment, Login, CloudDone, Backup
 } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -144,6 +144,7 @@ const AdminPanel = () => {
     { text: 'User Management', icon: <People />, path: '/admin/users' },
     { text: 'Subscriptions', icon: <AttachMoney />, path: '/admin/subscriptions', paymentBadge: true },
     { text: 'Client Chat', icon: <Chat />, path: '/admin/chat', chatBadge: true },
+    { text: 'DB Backup', icon: <Backup />, path: '/admin/backup' },
     { text: 'Activity Logs', icon: <History />, path: '/admin/logs' },
     { text: 'Settings', icon: <Settings />, path: '/admin/settings' },
   ];
@@ -350,6 +351,7 @@ const AdminPanel = () => {
           <Route path="/subscriptions" element={<SubscriptionManagement />} />
           <Route path="/subscriptions/payment-test" element={<PaymentVerificationTest />} />
           <Route path="/chat" element={<AdminChat />} />
+          <Route path="/backup" element={<DatabaseBackup />} />
           <Route path="/logs" element={<ActivityLogsPage />} />
           <Route path="/settings" element={<AdminSettings />} />
         </Routes>
@@ -3569,6 +3571,314 @@ const AdminChat = () => {
           </Card>
         </Grid>
       </Grid>
+    </Box>
+  );
+};
+
+// ============ DATABASE BACKUP COMPONENT ============
+const DatabaseBackup = () => {
+  const [status, setStatus] = useState({
+    googleDriveConfigured: false,
+    localBackupConfigured: false,
+    lastBackup: null,
+    retentionDays: 7,
+    totalBackups: 0
+  });
+  const [backups, setBackups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    fetchBackupData();
+  }, []);
+
+  const fetchBackupData = async () => {
+    setLoading(true);
+    try {
+      const [statusRes, backupsRes] = await Promise.all([
+        api.get('/admin/backup/status'),
+        api.get('/admin/backup/list')
+      ]);
+      setStatus(statusRes.data);
+      setBackups(backupsRes.data.backups || []);
+    } catch (error) {
+      console.error('Failed to fetch backup data:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load backup data',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    setCreating(true);
+    try {
+      const response = await api.post('/admin/backup/create');
+      setSnackbar({
+        open: true,
+        message: `Backup created successfully: ${response.data.fileName}`,
+        severity: 'success'
+      });
+      await fetchBackupData();
+    } catch (error) {
+      console.error('Backup failed:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.error || 'Failed to create backup',
+        severity: 'error'
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDownload = async (backup) => {
+    try {
+      const response = await api.get(`/admin/backup/download/${backup.id}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', backup.name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setSnackbar({
+        open: true,
+        message: 'Backup downloaded successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Download failed:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to download backup',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleDelete = async (backup) => {
+    if (!window.confirm(`Are you sure you want to delete "${backup.name}"? This cannot be undone.`)) {
+      return;
+    }
+
+    setDeleting(backup.id);
+    try {
+      await api.delete(`/admin/backup/${backup.id}`);
+      setSnackbar({
+        open: true,
+        message: 'Backup deleted successfully',
+        severity: 'success'
+      });
+      await fetchBackupData();
+    } catch (error) {
+      console.error('Delete failed:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.error || 'Failed to delete backup',
+        severity: 'error'
+      });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <LinearProgress />
+        <Typography sx={{ mt: 2, textAlign: 'center' }}>Loading backup data...</Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box>
+          <Typography variant="h5" fontWeight="bold">Database Backup</Typography>
+          <Typography variant="body2" color="textSecondary">
+            Manage automated database backups to Google Drive
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={fetchBackupData}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={creating ? <CircularProgress size={20} color="inherit" /> : <Backup />}
+            onClick={handleCreateBackup}
+            disabled={creating}
+          >
+            {creating ? 'Creating Backup...' : 'Backup Now'}
+          </Button>
+        </Box>
+      </Box>
+
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={4}>
+          <Card sx={{ borderRadius: 3, textAlign: 'center', p: 3 }}>
+            <CloudDone sx={{ fontSize: 48, color: status.googleDriveConfigured ? '#22c55e' : '#ef4444', mb: 1 }} />
+            <Typography variant="h6" fontWeight="bold">
+              {status.googleDriveConfigured ? 'Connected' : 'Not Connected'}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Google Drive {status.googleDriveConfigured ? 'Backup Enabled' : 'Not Configured'}
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card sx={{ borderRadius: 3, textAlign: 'center', p: 3 }}>
+            <Backup sx={{ fontSize: 48, color: '#8B5CF6', mb: 1 }} />
+            <Typography variant="h6" fontWeight="bold">
+              {status.totalBackups}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Total Backups Available
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card sx={{ borderRadius: 3, textAlign: 'center', p: 3 }}>
+            <History sx={{ fontSize: 48, color: '#3b82f6', mb: 1 }} />
+            <Typography variant="h6" fontWeight="bold">
+              {formatDate(status.lastBackup?.createdTime)}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Last Backup {status.lastBackup ? `(${formatFileSize(status.lastBackup.size)})` : ''}
+            </Typography>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+        <Typography variant="body2">
+          <strong>Automatic Daily Backups:</strong> Backups are automatically created daily at 2:00 AM IST and stored in Google Drive.
+          Retention policy keeps the last <strong>{status.retentionDays} days</strong> of backups.
+          Admin can also manually create backups anytime using the "Backup Now" button.
+        </Typography>
+      </Alert>
+
+      <Card sx={{ borderRadius: 3 }}>
+        <CardContent sx={{ p: 0 }}>
+          <Box sx={{ p: 3, borderBottom: '1px solid #e0e0e0' }}>
+            <Typography variant="h6" fontWeight="bold">Backup History</Typography>
+          </Box>
+          
+          {backups.length === 0 ? (
+            <Box sx={{ p: 6, textAlign: 'center' }}>
+              <Backup sx={{ fontSize: 64, color: '#e0e0e0', mb: 2 }} />
+              <Typography variant="h6" color="textSecondary">
+                No backups found
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Create your first backup using the "Backup Now" button above
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>File Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Date Created</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Size</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Location</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {backups.map((backup) => (
+                    <TableRow key={backup.id} hover>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Backup sx={{ color: '#8B5CF6' }} />
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                            {backup.name}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>{formatDate(backup.createdTime)}</TableCell>
+                      <TableCell>{formatFileSize(backup.size)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={backup.location === 'google_drive' ? 'Google Drive' : 'Local'}
+                          size="small"
+                          sx={{
+                            bgcolor: backup.location === 'google_drive' ? '#dcfce7' : '#dbeafe',
+                            color: backup.location === 'google_drive' ? '#166534' : '#1e40af'
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                          <Button size="small" variant="outlined" onClick={() => handleDownload(backup)}>
+                            Download
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={() => handleDelete(backup)}
+                            disabled={deleting === backup.id}
+                          >
+                            {deleting === backup.id ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
