@@ -8,30 +8,40 @@ class GoogleDriveService {
     this.drive = null;
     this.folderId = null;
     this.isInitialized = false;
+    this.oauth2Client = null;
   }
 
   async initialize() {
     if (this.isInitialized) return true;
 
     try {
-      const credentials = this.getCredentials();
+      const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+      const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
       
-      if (!credentials) {
-        console.log('[Backup] Google Drive credentials not configured');
+      if (!clientId || !clientSecret || !refreshToken) {
+        console.log('[Backup] Google Drive OAuth credentials not configured');
+        console.log('[Backup] Required: GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, GOOGLE_DRIVE_REFRESH_TOKEN');
         return false;
       }
 
-      const auth = new google.auth.GoogleAuth({
-        credentials,
-        scopes: ['https://www.googleapis.com/auth/drive']
+      this.oauth2Client = new google.auth.OAuth2(
+        clientId,
+        clientSecret,
+        'https://developers.google.com/oauthplayground'
+      );
+
+      this.oauth2Client.setCredentials({
+        refresh_token: refreshToken,
+        scope: ['https://www.googleapis.com/auth/drive']
       });
 
-      this.drive = google.drive({ version: 'v3', auth });
+      this.drive = google.drive({ version: 'v3', auth: this.oauth2Client });
       
       await this.ensureFolderExists();
       
       this.isInitialized = true;
-      console.log('[Backup] Google Drive service initialized');
+      console.log('[Backup] Google Drive service initialized with OAuth');
       return true;
     } catch (error) {
       console.error('[Backup] Failed to initialize Google Drive:', error.message);
@@ -39,22 +49,14 @@ class GoogleDriveService {
     }
   }
 
-  getCredentials() {
-    const credStr = process.env.GOOGLE_DRIVE_CREDENTIALS;
-    if (!credStr) return null;
-    
-    try {
-      return JSON.parse(credStr);
-    } catch {
-      return null;
-    }
-  }
-
   async ensureFolderExists() {
     try {
       const response = await this.drive.files.list({
         q: `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id, name)'
+        fields: 'files(id, name)',
+        spaces: 'drive',
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true
       });
 
       if (response.data.files.length > 0) {
@@ -66,7 +68,9 @@ class GoogleDriveService {
             name: FOLDER_NAME,
             mimeType: 'application/vnd.google-apps.folder'
           },
-          fields: 'id, name'
+          fields: 'id, name',
+          spaces: 'drive',
+          supportsAllDrives: true
         });
         this.folderId = folder.data.id;
         console.log(`[Backup] Created new folder: ${this.folderId}`);
@@ -100,7 +104,9 @@ class GoogleDriveService {
       const response = await this.drive.files.create({
         resource: fileMetadata,
         media,
-        fields: 'id, name, createdTime, size'
+        fields: 'id, name, createdTime, size',
+        spaces: 'drive',
+        supportsAllDrives: true
       });
 
       console.log(`[Backup] Uploaded: ${fileName} (ID: ${response.data.id})`);
@@ -108,7 +114,7 @@ class GoogleDriveService {
         id: response.data.id,
         name: response.data.name,
         createdTime: response.data.createdTime,
-        size: response.data.size
+        size: parseInt(response.data.size || 0)
       };
     } catch (error) {
       console.error('[Backup] Upload failed:', error.message);
@@ -129,7 +135,10 @@ class GoogleDriveService {
       const response = await this.drive.files.list({
         q: `'${this.folderId}' in parents and trashed=false`,
         fields: 'files(id, name, createdTime, size, mimeType)',
-        orderBy: 'createdTime desc'
+        orderBy: 'createdTime desc',
+        spaces: 'drive',
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true
       });
 
       return response.data.files.map(file => ({
@@ -151,7 +160,10 @@ class GoogleDriveService {
     }
 
     try {
-      await this.drive.files.delete({ fileId });
+      await this.drive.files.delete({
+        fileId,
+        supportsAllDrives: true
+      });
       console.log(`[Backup] Deleted file: ${fileId}`);
       return true;
     } catch (error) {
@@ -168,7 +180,8 @@ class GoogleDriveService {
     try {
       const response = await this.drive.files.get({
         fileId,
-        alt: 'media'
+        alt: 'media',
+        supportsAllDrives: true
       }, { responseType: 'stream' });
 
       const chunks = [];
