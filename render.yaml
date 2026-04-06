@@ -9,3 +9,16 @@ services:
         value: production
       - key: PORT
         value: 10000
+      # ===========================================
+      # DATABASE BACKUP SETTINGS
+      # ===========================================
+      # Set these in Render Dashboard for security:
+      # - USE_GOOGLE_DRIVE=true
+      # - BACKUP_RETENTION_DAYS=7
+      # - GOOGLE_DRIVE_CREDENTIALS (from service account JSON)
+      - key: USE_GOOGLE_DRIVE
+        sync: false
+      - key: BACKUP_RETENTION_DAYS
+        sync: false
+      - key: GOOGLE_DRIVE_CREDENTIALS
+        sync: false
