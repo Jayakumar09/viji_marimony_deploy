@@ -2,19 +2,21 @@
 
 A community-focused matrimony platform for the Boyar community.
 
-## 📋 Project Status (As of March 31, 2026)
+## 📋 Project Status (As of April 6, 2026)
 
 ### 🚀 Live Deployment
 - **Frontend**: https://vijayalakshmiboyarmatrimony.com (Cloudflare Pages)
 - **Backend API**: https://viji-marimony-deploy-backend.onrender.com (Render)
 - **Database**: AWS RDS PostgreSQL (Production)
 - **Cloudinary**: Configured and working
+- **Google Drive**: Configured for automated backups
 
 ### ✅ Current System Status
 - **Total Users**: 2 (Active)
 - **Admin Dashboard**: Working correctly
 - **User Management**: Displaying users successfully
 - **Auto-Deploy**: GitHub Actions connected
+- **Database Backup**: Automated daily backups to Google Drive
 
 ### 📊 Active Features
 - User Registration & Authentication (JWT)
@@ -27,37 +29,39 @@ A community-focused matrimony platform for the Boyar community.
 - Payment Processing (UPI/Manual)
 - Profile PDF Generation
 - Shared Profile Links
+- **Database Backup System** (NEW!)
 
 ### 🔧 Auto-Deployment Status
 - **Backend**: Auto-deploys to Render on every push to master
 - **Frontend**: Auto-deploys to Cloudflare Pages on every push to master
 - Both deployments triggered by GitHub Actions
 
-## 📋 Project Status (Legacy)
-
-## Project Structure
+## 📋 Project Structure
 
 ```
 ├── backend/
 │   ├── controllers/      # Business logic
-│   ├── routes/          # API endpoints
-│   ├── middleware/       # Auth, validation
-│   ├── utils/           # Helpers (image upload, JWT, DB, OTP)
-│   ├── prisma/          # Database schema & seeds
-│   └── server.js        # Main server file
+│   ├── routes/           # API endpoints
+│   ├── middleware/        # Auth, validation
+│   ├── services/          # External services (Google Drive, backup scheduler)
+│   ├── modules/           # Reusable modules (Activity Logs)
+│   ├── utils/             # Helpers (image upload, JWT, DB, OTP)
+│   ├── prisma/            # Database schema & seeds
+│   └── server.js          # Main server file
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/       # Page components (Login, Profile, etc)
-│   │   ├── components/  # Reusable components
-│   │   ├── services/    # API calls
-│   │   ├── contexts/    # React Context (Auth)
-│   │   ├── hooks/       # Custom hooks (useAuth)
-│   │   ├── data/        # Static data (Indian locations, Horoscope)
-│   │   └── utils/       # Helpers (image compression)
-│   └── public/          # Static assets
-├── database/            # Database setup docs
-├── PROFILE_UPDATES.md   # Profile features documentation
-└── README.md           # This file
+│   │   ├── pages/         # Page components (Login, Profile, etc)
+│   │   ├── components/     # Reusable components
+│   │   ├── services/       # API calls
+│   │   ├── contexts/       # React Context (Auth)
+│   │   ├── hooks/          # Custom hooks (useAuth)
+│   │   ├── data/           # Static data (Indian locations, Horoscope)
+│   │   ├── admin/          # Admin panel components
+│   │   └── utils/          # Helpers (image compression)
+│   └── public/             # Static assets
+├── database/               # Database setup docs
+├── PROFILE_UPDATES.md      # Profile features documentation
+└── README.md                # This file
 ```
 
 ## ✨ Features
@@ -76,21 +80,21 @@ A community-focused matrimony platform for the Boyar community.
   - Professional: Education, Profession, Income range
   - Appearance: Height, Weight, Complexion
   - Personal: Bio, Marital Status, Family Values, About Family
-- **Horoscope Details** (New!):
+- **Horoscope Details**:
   - Raasi (Moon Sign): 12 Indian zodiac signs
   - Natchathiram (Star/Nakshatra): Auto-selects based on Raasi
   - Lagnam (Ascendant): 12 ascendant signs
   - Dhosam: Dosh types (Kuja, Rahu, Kethu, etc.)
   - Birth Details: Date, Time, Place
-- **Family Background** (New!):
+- **Family Background**:
   - Father's Name, Occupation, Caste
   - Mother's Name, Occupation, Caste
-- **Subscription Plans** (New!):
+- **Subscription Plans**:
   - Free: ₹0, Success Fee: ₹0
   - Standard: ₹999, Success Fee: ₹5,000
   - Premium: ₹2,499, Success Fee: ₹10,000
   - Elite: ₹4,999, Success Fee: ₹25,000
-- **Mandatory Documents** (New!):
+- **Mandatory Documents**:
   - Government ID (Aadhaar, PAN)
   - Proof of Current Address
   - Financial Verification (Bank Statement/ITR)
@@ -100,7 +104,7 @@ A community-focused matrimony platform for the Boyar community.
 - **Interest System**: Connect with other profiles
 - **Messaging**: Direct messaging between matched users
 - **Search/Matching**: Find compatible profiles
-- **Chat System** (New!):
+- **Chat System**:
   - Real-time chat between users and admin
   - Message history stored in database
   - Delete messages functionality
@@ -117,6 +121,17 @@ A community-focused matrimony platform for the Boyar community.
   - Photo verification queue (approve/reject photos)
   - User management with verification status
   - Document verification
+  - **Database Backup Management** (NEW!)
+
+### Database Backup System (NEW!)
+Automated database backups with Google Drive integration:
+- **Automatic Daily Backups**: Cron scheduler runs at 2:00 AM IST daily
+- **Google Drive Storage**: Backups stored in admin's Google Drive account
+- **OAuth 2.0 Authentication**: Secure access using refresh token (NOT service account)
+- **Retention Policy**: Keeps last 7 days of backups (configurable)
+- **Manual Backup**: Admin can trigger backup anytime via "Backup Now" button
+- **Backup History**: View all backups with download/delete options
+- **Activity Logging**: All backup operations logged in Activity Logs
 
 ### Technology Stack
 - **Frontend**: 
@@ -135,13 +150,16 @@ A community-focused matrimony platform for the Boyar community.
   - Input validation middleware
   - Nodemailer (email OTP)
   - Twilio (SMS OTP)
+  - node-cron (scheduled tasks)
+  - googleapis (Google Drive integration)
    
 - **Database**: 
-  - SQLite (development)
+  - PostgreSQL (Production via AWS RDS)
   - Prisma schema with migrations
    
 - **Cloud Services**:
   - Cloudinary (image hosting)
+  - Google Drive (backup storage)
 
 ## 🚀 Getting Started
 
@@ -150,6 +168,7 @@ A community-focused matrimony platform for the Boyar community.
 - npm or yarn
 - Cloudinary account (for image upload) - [Sign up free](https://cloudinary.com)
 - Twilio account (for SMS) - [Sign up free](https://twilio.com)
+- Google Cloud project with Drive API (for backups) - [Setup guide below]
 
 ### Installation
 
@@ -161,7 +180,7 @@ A community-focused matrimony platform for the Boyar community.
 
 2. **Setup environment variables**
 
-   Backend `.env` file:
+   Backend `.env` file (copy from `.env.example`):
    ```
    DATABASE_URL="file:./dev.db"
    JWT_SECRET=your-secret-key-here
@@ -230,7 +249,7 @@ npm run build  # Creates optimized build in build/ folder
   - Select "Karnataka" → Shows: Bangalore, Mysore, Mangalore, etc
   - Select "Tamil Nadu" → Shows: Chennai, Coimbatore, Madurai, etc
 
-### Horoscope Details (NEW!)
+### Horoscope Details
 - **Raasi (Moon Sign)**: Select from 12 Indian zodiac signs
   - Mesham, Rishabam, Mithunam, Kadagam, Simmam, Kanni
   - Thulam, Vrischikam, Dhanusu, Makaram, Kumbam, Meenam
@@ -250,7 +269,7 @@ npm run build  # Creates optimized build in build/ folder
   - Birth Time (time picker)
   - Birth Place (text input)
 
-### Family Background (NEW!)
+### Family Background
 - **Father's Details**:
   - Father's Name
   - Father's Occupation
@@ -261,7 +280,7 @@ npm run build  # Creates optimized build in build/ folder
   - Mother's Occupation
   - Mother's Caste
 
-### Subscription Plans (NEW!)
+### Subscription Plans
 Choose a subscription tier based on your needs:
 
 | Plan | Price | Success Fee | Features |
@@ -273,7 +292,7 @@ Choose a subscription tier based on your needs:
 
 **Note**: Success fee is applicable only when marriage is fixed through our platform. This follows the guidelines set by the Government of India for matrimonial services.
 
-### Mandatory Documents (NEW!)
+### Mandatory Documents
 Upload required documents for verification:
 
 | Document Type | Required | Status Tracking |
@@ -297,7 +316,7 @@ Upload required documents for verification:
 - Education, Profession, Income
 - Height, Weight, Complexion
 - Bio, Family Values, About Family
-- **NEW**: Horoscope Details, Family Background
+- Horoscope Details, Family Background
 
 ## 🔧 API Endpoints
 
@@ -311,13 +330,13 @@ Upload required documents for verification:
 - `POST /api/profile/photo` - Upload profile photo
 - `POST /api/profile/photos` - Upload gallery photos (up to 9)
 - `DELETE /api/profile/photo` - Delete gallery photo
-- `PUT /api/profile/horoscope` - Update horoscope details (NEW!)
-- `PUT /api/profile/family` - Update family background (NEW!)
-- `PUT /api/profile/subscription` - Update subscription tier (NEW!)
-- `GET /api/profile/subscription/plans` - Get subscription plans (NEW!)
-- `POST /api/profile/documents` - Upload document (NEW!)
-- `GET /api/profile/documents` - Get uploaded documents (NEW!)
-- `DELETE /api/profile/documents/:id` - Delete document (NEW!)
+- `PUT /api/profile/horoscope` - Update horoscope details
+- `PUT /api/profile/family` - Update family background
+- `PUT /api/profile/subscription` - Update subscription tier
+- `GET /api/profile/subscription/plans` - Get subscription plans
+- `POST /api/profile/documents` - Upload document
+- `GET /api/profile/documents` - Get uploaded documents
+- `DELETE /api/profile/documents/:id` - Delete document
 
 ### Verification
 - `POST /api/verification/email/send-otp` - Send email OTP
@@ -334,11 +353,70 @@ Upload required documents for verification:
 - `GET /api/admin/users` - List all users
 - `PUT /api/admin/users/:id/verification` - Manual verification
 
+### Database Backup (Admin only)
+- `GET /api/admin/backup/status` - Get backup status and configuration
+- `GET /api/admin/backup/list` - List all backups
+- `POST /api/admin/backup/create` - Create manual backup
+- `GET /api/admin/backup/download/:backupId` - Download backup file
+- `DELETE /api/admin/backup/:backupId` - Delete a backup
+- `POST /api/admin/backup/enforce-retention` - Run retention policy
+
 ### Other
 - `GET /` - Health check
 - `GET /api/search` - Search profiles
 - `GET /api/interests` - Manage interests
 - `GET /api/messages` - Messaging system
+
+## 💾 Database Backup Setup
+
+### Google Drive OAuth 2.0 Setup
+
+**Important**: Service Accounts do NOT have storage quota in personal Google Drive. Use OAuth 2.0 with a real user account instead.
+
+1. **Create OAuth 2.0 Client ID**:
+   - Go to https://console.cloud.google.com/
+   - APIs & Services → Credentials → Create Credentials → OAuth client ID
+   - Application type: Web application
+   - Add redirect URI: `https://developers.google.com/oauthplayground`
+
+2. **Enable Google Drive API**:
+   - APIs & Services → Library → Search "Google Drive API" → Enable
+
+3. **Get Refresh Token via OAuth Playground**:
+   - Go to: https://developers.google.com/oauthplayground
+   - Click Settings (⚙️) → Check "Use your own OAuth credentials"
+   - Enter your Client ID and Client Secret
+   - In Step 1, select `Drive API v3` with scope `https://www.googleapis.com/auth/drive`
+   - Click "Authorize APIs" → Complete the OAuth flow with admin email
+   - In Step 2, click "Exchange authorization code for tokens"
+   - Copy the `refresh_token`
+
+4. **Set Environment Variables**:
+   ```env
+   GOOGLE_DRIVE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_DRIVE_CLIENT_SECRET=your-client-secret
+   GOOGLE_DRIVE_REFRESH_TOKEN=your-refresh-token
+   ```
+
+### Backup Configuration Options
+
+```env
+# Enable/disable Google Drive backup (default: true)
+USE_GOOGLE_DRIVE=true
+
+# Enable local backup storage (default: false)
+USE_LOCAL_BACKUP=false
+
+# Local backup folder path
+BACKUP_LOCAL_PATH=./backups
+
+# Retention period in days (default: 7)
+BACKUP_RETENTION_DAYS=7
+
+# Cron schedule (default: 2:00 AM IST)
+BACKUP_CRON_HOUR=2
+BACKUP_CRON_MINUTE=0
+```
 
 ## 🧪 Testing (Updated for New Features)
 
@@ -367,58 +445,14 @@ Upload required documents for verification:
 5. Review pending photo approvals
 6. Approve/reject user photos
 
-### Test Profile Features
-1. After login, click "Profile"
-2. Click "Edit" button
-3. Upload profile photo (auto-compresses)
-4. Select a state from dropdown
-5. Verify city dropdown updates with that state's cities
-6. Edit fields (phone, education, bio, etc)
-7. Click "Save" to submit
-8. Upload gallery photos (up to 9)
-
-### Test Horoscope Details (NEW!)
-1. Go to Profile page
-2. Click "Horoscope" tab
-3. Click "Edit" button
-4. Select Raasi (Moon Sign) from dropdown
-5. Verify Natchathiram dropdown auto-populates with stars for that Raasi
-6. Select Lagnam and Dhosam
-7. Enter birth date, time, and place
-8. Click "Save"
-
-### Test Family Background (NEW!)
-1. Go to Profile page
-2. Click "Family" tab
-3. Click "Edit" button
-4. Enter Father's Name, Occupation, Caste
-5. Enter Mother's Name, Occupation, Caste
-6. Click "Save"
-
-### Test Subscription Plans (NEW!)
-1. Go to Profile page
-2. Click "Subscription" tab
-3. View all available plans with prices and success fees
-4. Click "Select Plan" on desired tier
-5. Confirm subscription update
-6. See current plan highlighted
-
-### Test Mandatory Documents (NEW!)
-1. Go to Profile page
-2. Click "Documents" tab
-3. View required documents checklist
-4. Click "Upload Document" button
-5. Select document type from dropdown
-6. Upload file (image or PDF)
-7. View uploaded documents in table
-8. Check status (Pending/Approved/Rejected)
-9. Delete and re-upload if rejected
-
-### Test Image Compression
-1. Upload a large image (>50KB)
-2. Open browser DevTools → Network tab
-3. Check Cloudinary request → Image should be <50KB
-4. Verify quality is acceptable
+### Test DB Backup System (NEW!)
+1. Login as admin
+2. Go to Admin Panel → "DB Backup" in sidebar
+3. View backup status cards (Google Drive connection, total backups, last backup)
+4. Click "Backup Now" to create manual backup
+5. Wait for backup to complete
+6. View backup in history table
+7. Download or delete backups as needed
 
 ## 📝 Admin & Contact Information
 
@@ -431,16 +465,36 @@ Upload required documents for verification:
 - **Email**: info@vijayalakshmiboyarmatrimony.com (for user inquiries)
 - **Phone**: +91 7639150271
 
+## 🆕 RECENT UPDATES (April 2026)
+
+### Database Backup System (NEW!)
+Automated database backup system with Google Drive integration:
+- **Backend Files**:
+  - `backend/services/googleDriveService.js` - Google Drive OAuth integration
+  - `backend/services/backupScheduler.js` - Cron scheduler for daily backups
+  - `backend/controllers/backupController.js` - Backup logic (pg_dump, upload, retention)
+  - `backend/routes/backup.js` - Admin-only API routes
+- **Frontend**:
+  - Added "DB Backup" menu in Admin Panel sidebar
+  - New Backup page with status, history, download/delete options
+- **Features**:
+  - Automatic daily backups at 2:00 AM IST
+  - OAuth 2.0 authentication (not service account - no storage quota issue)
+  - Retention policy (keeps last 7 backups by default)
+  - Manual backup trigger via "Backup Now" button
+  - All operations logged in Activity Logs
+- **Note**: Service Accounts don't have storage quota in personal Google Drive. OAuth 2.0 with refresh token is used instead.
+
 ## 🆕 RECENT UPDATES (March 2026)
 
-### Admin Chat - All Users Tab (NEW!)
+### Admin Chat - All Users Tab
 Admin can now initiate chat with any registered user:
 - **Two Tabs**: "Conversations" (existing chats) + "All Users" (new)
 - **Start New Chat**: Admin can select any user from "All Users" tab
 - **Use Case**: Contact users about payment issues, verification queries
 - **Location**: Admin Panel → Client Chat
 
-### Gallery Photos - View Button (NEW!)
+### Gallery Photos - View Button
 Admin can now view images in full size before Approve/Reject:
 - **View Button**: Added next to Approve/Reject in Gallery Photos
 - **Full Size Preview**: Opens dialog with enlarged image
@@ -454,34 +508,15 @@ Admin can now view images in full size before Approve/Reject:
 - **Database**: AWS RDS PostgreSQL
 - **Auto Deploy**: GitHub Actions linked to both Render (backend) and Cloudflare (frontend)
 
-## 🆕 RECENT UPDATES (March 2026)
-
-### Admin Dashboard Total Users Fix (March 31, 2026)
-- **Issue**: Admin dashboard showed "Total Users = 0" despite database having 2 users
-- **Root Cause**: GitHub Actions workflow had wrong API URL in build step
-- **Fix**: Changed `REACT_APP_API_URL` from `viji-marimony-new.onrender.com` to `viji-marimony-deploy-backend.onrender.com`
-- **Result**: Admin dashboard now correctly displays Total Users: 2
-
-### GitHub Actions Auto-Deployment (NEW!)
+### GitHub Actions Auto-Deployment
 - Added `.github/workflows/deploy.yml` for automatic deployment
 - Backend auto-deploys to Render on every push to master
 - Frontend auto-deploys to Cloudflare Pages on every push to master
 - Required secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, RENDER_API_TOKEN, RENDER_BACKEND_SERVICE_ID
 
-### Admin Dashboard Improvements (NEW!)
-- Fixed View button in Photo Approvals section
-- Added "View" button and modal dialog to view photo details
-- Added Start Date column to Subscription & Payment Management
-- Updated date/time format to show both date and time (e.g., "20 Mar 2026, 10:30 AM")
-- Admin now shows correct user count from database (3 users, not mock data)
-
-### Bug Fixes
-- Fixed admin login 404 error - endpoint URL corrected to `/api/auth/admin/login`
-- Fixed chat image URL - production environment variable used
-
 ## 🆕 RECENT UPDATES (February 2025)
 
-### Profile Photo Zoom & Pan Adjustment (NEW!)
+### Profile Photo Zoom & Pan Adjustment
 Users can now adjust their profile photo after uploading:
 - **Zoom In/Out**: Use scroll wheel or +/- buttons (0.5x to 5x range)
 - **Pan Image**: Click and drag to reposition photo within the circle
@@ -493,17 +528,13 @@ Users can now adjust their profile photo after uploading:
 - Added `profilePhotoScale`, `profilePhotoX`, `profilePhotoY` fields to users table
 - New API endpoint: `PUT /api/profile/photo/adjustments`
 
-### Subscription Page Improvements (NEW!)
+### Subscription Page Improvements
 Enhanced subscription plan visibility:
 - **Plan Numbers**: Numbered circles (1, 2, 3, 4) for easy identification
 - **Current Plan Badge**: Green "CURRENT PLAN" badge on active plan
 - **Visual Highlighting**: Green border and scale animation for current plan
 - **Clear Status**: Always visible current plan chip at top
 - **FREE Plan Support**: Properly shows FREE as default current plan
-
-### Bug Fixes
-- Fixed console warnings for null values in Select components (raasi, natchathiram, dhosam)
-- Normalized horoscope fields to prevent null value errors
 
 ## 🎯 Community Focus
 Built specifically for the Boyar community with:
