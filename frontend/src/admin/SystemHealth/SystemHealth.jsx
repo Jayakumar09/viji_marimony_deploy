@@ -482,7 +482,7 @@ const SystemHealth = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Warning sx={{ color: '#eab308' }} />
             <span>System Alerts</span>
-            {unreadCount > 0 && <Chip label={`${unreadCount} unread`} size="small" color="warning" />)}
+            {unreadCount > 0 && <Chip label={`${unreadCount} unread`} size="small" color="warning" />}
           </Box>
           <Box>
             {unreadCount > 0 && (
