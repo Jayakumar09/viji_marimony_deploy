@@ -6,11 +6,11 @@ import {
   ListItem, ListItemText, ListItemIcon, Divider, CircularProgress
 } from '@mui/material';
 import {
-  Refresh as RefreshIcon, Storage, Cloud, Folder, Server,
+  Refresh as RefreshIcon, Storage, Cloud, Folder, Hub,
   CheckCircle, Warning, Error as ErrorIcon, Info, Close,
-  TrendingUp, Database, NetworkCheck, Schedule, DeleteSweep
+  TrendingUp, Dns, NetworkCheck, Schedule, DeleteSweep
 } from '@mui/icons-material';
-import api from '../../../services/api';
+import api from '../../services/api';
 
 const formatBytes = (bytes, decimals = 2) => {
   if (bytes === 0) return '0 Bytes';
@@ -291,7 +291,7 @@ const SystemHealth = () => {
         <Grid item xs={12} md={6} lg={3}>
           <MetricCard
             title="PostgreSQL"
-            icon={<Database sx={{ color: '#8B5CF6' }} />}
+            icon={<Dns sx={{ color: '#8B5CF6' }} />}
             status={metrics?.postgresql?.status === 'unhealthy' ? 'error' : 'healthy'}
           >
             <ServiceStatusBadge status={metrics?.postgresql?.connectionHealth === 'good' ? 'healthy' : 'warning'} />
@@ -412,7 +412,7 @@ const SystemHealth = () => {
         <Grid item xs={12} md={6} lg={3}>
           <MetricCard
             title="Render (Backend)"
-            icon={<Server sx={{ color: '#673ab7' }} />}
+            icon={<Hub sx={{ color: '#673ab7' }} />}
             status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
           >
             <ServiceStatusBadge status={metrics?.render?.apiHealth === 'healthy' ? 'healthy' : 'degraded'} />
