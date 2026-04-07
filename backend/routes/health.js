@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { adminMiddleware } = require('../middleware/auth');
+const { adminAuthMiddleware } = require('../middleware/auth');
 const healthService = require('../services/healthService');
 
-router.use(adminMiddleware);
+router.use(adminAuthMiddleware);
 
 router.get('/metrics', async (req, res) => {
   try {
