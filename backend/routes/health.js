@@ -17,7 +17,7 @@ router.get('/metrics', async (req, res) => {
 
 router.get('/alerts', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseInt(req.query.limit) || 50;
     const alerts = await healthService.getRecentAlerts(limit);
     const unreadCount = await healthService.getUnreadAlertCount();
     res.json({ alerts, unreadCount });
@@ -54,6 +54,31 @@ router.put('/alerts/read-all', async (req, res) => {
   } catch (error) {
     console.error('[Health API] Failed to mark all alerts read:', error.message);
     res.status(500).json({ error: 'Failed to update alerts' });
+  }
+});
+
+router.delete('/alerts/cleanup', async (req, res) => {
+  try {
+    const daysOld = parseInt(req.query.days) || 30;
+    const result = await healthService.clearOldAlerts(daysOld);
+    if (result.success) {
+      res.json({ success: true, deletedCount: result.deletedCount });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('[Health API] Failed to clear old alerts:', error.message);
+    res.status(500).json({ error: 'Failed to cleanup alerts' });
+  }
+});
+
+router.post('/backup-check', async (req, res) => {
+  try {
+    const metrics = await healthService.triggerBackupCheck();
+    res.json({ success: true, metrics });
+  } catch (error) {
+    console.error('[Health API] Failed to trigger backup check:', error.message);
+    res.status(500).json({ error: 'Failed to trigger backup check' });
   }
 });
 

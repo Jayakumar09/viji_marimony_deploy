@@ -1,24 +1,37 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Box, Card, CardContent, Typography, Grid, Button, LinearProgress,
-  Chip, Alert, IconButton, Tooltip, Switch, FormControlLabel,
+  Chip, Alert, IconButton, Switch, FormControlLabel,
   Dialog, DialogTitle, DialogContent, DialogActions, List,
-  ListItem, ListItemText, ListItemIcon, Divider, CircularProgress
+  ListItem, ListItemText, ListItemIcon, Divider, CircularProgress,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Paper, Tooltip
 } from '@mui/material';
 import {
-  Refresh as RefreshIcon, Storage, Cloud, Folder, Hub,
+  Refresh as RefreshIcon, Cloud, Folder, Hub,
   CheckCircle, Warning, Error as ErrorIcon, Info, Close,
-  TrendingUp, Dns, NetworkCheck, Schedule, DeleteSweep
+  TrendingUp, TrendingDown, Dns, DeleteSweep, Schedule,
+  Storage as StorageIcon, DataUsage, Speed, Timer
 } from '@mui/icons-material';
 import api from '../../services/api';
 
 const formatBytes = (bytes, decimals = 2) => {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return '0 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+const formatBytesMB = (bytes) => {
+  if (bytes === 0) return '0 MB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+};
+
+const formatBytesGB = (bytes) => {
+  if (bytes === 0) return '0 GB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 };
 
 const formatUptime = (seconds) => {
@@ -44,18 +57,44 @@ const getUsageBgColor = (percent) => {
   return '#fee2e2';
 };
 
-const UsageBar = ({ value, label, showPercent = true, color }) => {
+const getSeverityChip = (severity) => {
+  const config = {
+    info: { color: 'info', bgcolor: '#dbeafe', textcolor: '#1e40af' },
+    warning: { color: 'warning', bgcolor: '#fef9c3', textcolor: '#854d0e' },
+    error: { color: 'error', bgcolor: '#fee2e2', textcolor: '#991b1b' },
+    critical: { color: 'error', bgcolor: '#fecaca', textcolor: '#7f1d1d' }
+  };
+  const c = config[severity] || config.info;
+  return (
+    <Chip 
+      label={severity.toUpperCase()} 
+      size="small"
+      sx={{ 
+        bgcolor: c.bgcolor, 
+        color: c.textcolor, 
+        fontWeight: 600,
+        fontSize: '0.65rem',
+        height: 20
+      }} 
+    />
+  );
+};
+
+const UsageBar = ({ value, label, sublabel, color }) => {
   const bgColor = color || getUsageBgColor(value);
   const barColor = color || getUsageColor(value);
   return (
-    <Box sx={{ mb: 1 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-        <Typography variant="body2" color="textSecondary">{label}</Typography>
-        {showPercent && (
-          <Typography variant="body2" fontWeight={600} sx={{ color: barColor }}>
-            {value}%
-          </Typography>
-        )}
+    <Box sx={{ mb: 1.5 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="textSecondary">{label}</Typography>
+          {sublabel && (
+            <Typography variant="caption" color="textSecondary" sx={{ opacity: 0.7 }}>({sublabel})</Typography>
+          )}
+        </Box>
+        <Typography variant="body2" fontWeight={600} sx={{ color: barColor }}>
+          {typeof value === 'number' ? value.toFixed(1) : value}%
+        </Typography>
       </Box>
       <LinearProgress
         variant="determinate"
@@ -74,12 +113,13 @@ const UsageBar = ({ value, label, showPercent = true, color }) => {
   );
 };
 
-const MetricCard = ({ title, icon, children, status = 'healthy' }) => {
+const MetricCard = ({ title, icon, iconColor, children, status = 'healthy', action }) => {
   const statusColors = {
-    healthy: { border: '#22c55e', bg: '#dcfce7', icon: '#22c55e' },
-    warning: { border: '#eab308', bg: '#fef9c3', icon: '#eab308' },
-    error: { border: '#ef4444', bg: '#fee2e2', icon: '#ef4444' },
-    unknown: { border: '#94a3b8', bg: '#f1f5f9', icon: '#94a3b8' }
+    healthy: { border: '#22c55e', bg: '#dcfce7' },
+    warning: { border: '#eab308', bg: '#fef9c3' },
+    error: { border: '#ef4444', bg: '#fee2e2' },
+    degraded: { border: '#f97316', bg: '#ffedd5' },
+    unknown: { border: '#94a3b8', bg: '#f1f5f9' }
   };
   const colors = statusColors[status] || statusColors.unknown;
 
@@ -94,20 +134,25 @@ const MetricCard = ({ title, icon, children, status = 'healthy' }) => {
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
       }
     }}>
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.5 }}>
-          <Box sx={{
-            width: 40,
-            height: 40,
-            borderRadius: 2,
-            bgcolor: colors.bg,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {icon}
+      <CardContent sx={{ p: 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              bgcolor: colors.bg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {icon}
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={600}>{title}</Typography>
+            </Box>
           </Box>
-          <Typography variant="h6" fontWeight={600}>{title}</Typography>
+          {action}
         </Box>
         {children}
       </CardContent>
@@ -115,15 +160,20 @@ const MetricCard = ({ title, icon, children, status = 'healthy' }) => {
   );
 };
 
-const ServiceStatusBadge = ({ status }) => {
+const ServiceStatusBadge = ({ status, size = 'small' }) => {
   const statusConfig = {
-    healthy: { color: 'success', label: 'Healthy', icon: <CheckCircle sx={{ fontSize: 16 }} /> },
-    warning: { color: 'warning', label: 'Warning', icon: <Warning sx={{ fontSize: 16 }} /> },
-    error: { color: 'error', label: 'Error', icon: <ErrorIcon sx={{ fontSize: 16 }} /> },
-    degraded: { color: 'warning', label: 'Degraded', icon: <Warning sx={{ fontSize: 16 }} /> },
-    not_configured: { color: 'default', label: 'Not Configured', icon: <Info sx={{ fontSize: 16 }} /> },
-    no_backups: { color: 'warning', label: 'No Backups', icon: <Warning sx={{ fontSize: 16 }} /> },
-    unknown: { color: 'default', label: 'Unknown', icon: <Info sx={{ fontSize: 16 }} /> }
+    healthy: { color: 'success', label: 'Healthy', icon: <CheckCircle sx={{ fontSize: 14 }} /> },
+    warning: { color: 'warning', label: 'Warning', icon: <Warning sx={{ fontSize: 14 }} /> },
+    error: { color: 'error', label: 'Error', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
+    degraded: { color: 'warning', label: 'Degraded', icon: <Warning sx={{ fontSize: 14 }} /> },
+    not_configured: { color: 'default', label: 'Not Configured', icon: <Info sx={{ fontSize: 14 }} /> },
+    no_backups: { color: 'warning', label: 'No Backups', icon: <Warning sx={{ fontSize: 14 }} /> },
+    disabled: { color: 'default', label: 'Disabled', icon: <Info sx={{ fontSize: 14 }} /> },
+    scheduled: { color: 'success', label: 'Scheduled', icon: <Schedule sx={{ fontSize: 14 }} /> },
+    excellent: { color: 'success', label: 'Excellent', icon: <CheckCircle sx={{ fontSize: 14 }} /> },
+    slow: { color: 'warning', label: 'Slow', icon: <Warning sx={{ fontSize: 14 }} /> },
+    disconnected: { color: 'error', label: 'Disconnected', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
+    unknown: { color: 'default', label: 'Unknown', icon: <Info sx={{ fontSize: 14 }} /> }
   };
   const config = statusConfig[status] || statusConfig.unknown;
   return (
@@ -131,11 +181,23 @@ const ServiceStatusBadge = ({ status }) => {
       icon={config.icon}
       label={config.label}
       color={config.color}
-      size="small"
+      size={size}
       sx={{ fontWeight: 500 }}
     />
   );
 };
+
+const ConnectionIndicator = ({ connected }) => (
+  <Tooltip title={connected ? 'Connected' : 'Disconnected'}>
+    <Box sx={{
+      width: 10,
+      height: 10,
+      borderRadius: '50%',
+      bgcolor: connected ? '#22c55e' : '#ef4444',
+      ml: 1
+    }} />
+  </Tooltip>
+);
 
 const SystemHealth = () => {
   const [metrics, setMetrics] = useState(null);
@@ -148,9 +210,7 @@ const SystemHealth = () => {
   const [alertsDialogOpen, setAlertsDialogOpen] = useState(false);
 
   const fetchMetrics = useCallback(async (isManualRefresh = false) => {
-    if (isManualRefresh) {
-      setRefreshing(true);
-    }
+    if (isManualRefresh) setRefreshing(true);
     try {
       const response = await api.get('/admin/health/metrics');
       setMetrics(response.data);
@@ -182,6 +242,16 @@ const SystemHealth = () => {
     }
   };
 
+  const clearOldAlerts = async () => {
+    if (!window.confirm('Delete read alerts older than 30 days?')) return;
+    try {
+      await api.delete('/admin/health/alerts/cleanup?days=30');
+      fetchAlerts();
+    } catch (error) {
+      console.error('Failed to clear old alerts:', error);
+    }
+  };
+
   useEffect(() => {
     fetchMetrics();
     fetchAlerts();
@@ -195,9 +265,7 @@ const SystemHealth = () => {
         fetchAlerts();
       }, 30000);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [autoRefresh, fetchMetrics, fetchAlerts]);
 
   const getOverallStatus = () => {
@@ -206,6 +274,7 @@ const SystemHealth = () => {
     if (postgresql?.status === 'unhealthy' || render?.status === 'error') return 'error';
     if (postgresql?.storageUsagePercent > 85 || cloudinary?.storagePercent > 85 || render?.memoryUsagePercent > 85) return 'error';
     if (postgresql?.storageUsagePercent > 70 || cloudinary?.storagePercent > 70 || render?.memoryUsagePercent > 70) return 'warning';
+    if (googleDrive?.totalBackups === 0) return 'warning';
     return 'healthy';
   };
 
@@ -219,30 +288,30 @@ const SystemHealth = () => {
     );
   }
 
+  const criticalAlerts = alerts.filter(a => a.severity === 'critical' || a.severity === 'error');
+  const warningAlerts = alerts.filter(a => a.severity === 'warning');
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h5" fontWeight="bold">System Health & Usage</Typography>
           <Typography variant="body2" color="textSecondary">
-            Monitor infrastructure and third-party service usage
+            Real-time infrastructure and service monitoring
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <FormControlLabel
             control={
-              <Switch
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                size="small"
-              />
+              <Switch checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} size="small" />
             }
-            label="Auto-refresh (30s)"
+            label="Auto-refresh"
           />
           <Button
             variant="outlined"
-            startIcon={<DeleteSweep />}
-            onClick={() => { setAlertsDialogOpen(true); }}
+            color={unreadCount > 0 ? 'warning' : 'inherit'}
+            startIcon={unreadCount > 0 ? <Warning sx={{ fontSize: 18 }} /> : <Info sx={{ fontSize: 18 }} />}
+            onClick={() => setAlertsDialogOpen(true)}
             sx={{ borderRadius: 2 }}
           >
             Alerts ({unreadCount})
@@ -261,29 +330,19 @@ const SystemHealth = () => {
 
       {lastUpdated && (
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
-          Last updated: {lastUpdated.toLocaleTimeString('en-IN')}
+          Last updated: {lastUpdated.toLocaleTimeString('en-IN')} · Auto-refresh: {autoRefresh ? 'ON (30s)' : 'OFF'}
         </Typography>
       )}
 
       {overallStatus === 'error' && (
-        <Alert
-          severity="error"
-          sx={{ mb: 3, borderRadius: 2 }}
-          icon={<ErrorIcon />}
-        >
-          <strong>Critical:</strong> One or more services are experiencing high usage or errors.
-          Please take immediate action to prevent service disruption.
+        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} icon={<ErrorIcon />}>
+          <strong>Critical:</strong> One or more services have errors or critical usage levels. Immediate action required.
         </Alert>
       )}
 
       {overallStatus === 'warning' && unreadCount > 0 && (
-        <Alert
-          severity="warning"
-          sx={{ mb: 3, borderRadius: 2 }}
-          icon={<Warning />}
-        >
-          <strong>Warning:</strong> Some services are approaching their usage limits.
-          Consider upgrading or optimizing resources.
+        <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }} icon={<Warning />}>
+          <strong>Warning:</strong> Services approaching usage limits. Review recommended.
         </Alert>
       )}
 
@@ -291,77 +350,96 @@ const SystemHealth = () => {
         <Grid item xs={12} md={6} lg={3}>
           <MetricCard
             title="PostgreSQL"
-            icon={<Dns sx={{ color: '#8B5CF6' }} />}
-            status={metrics?.postgresql?.status === 'unhealthy' ? 'error' : 'healthy'}
+            icon={<Dns sx={{ color: '#8B5CF6', fontSize: 22 }} />}
+            iconColor="#8B5CF6"
+            status={metrics?.postgresql?.status === 'unhealthy' ? 'error' : metrics?.postgresql?.storageUsagePercent > 70 ? 'warning' : 'healthy'}
           >
-            <ServiceStatusBadge status={metrics?.postgresql?.connectionHealth === 'good' ? 'healthy' : 'warning'} />
-            <Box sx={{ mt: 2 }}>
-              <UsageBar
-                label="Storage"
-                value={metrics?.postgresql?.storageUsagePercent || 0}
-              />
-              <UsageBar
-                label="Connections"
-                value={metrics?.postgresql?.connectionUsagePercent || 0}
-              />
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <ServiceStatusBadge status={metrics?.postgresql?.connectionHealth || 'unknown'} />
+              <ConnectionIndicator connected={metrics?.postgresql?.connected} />
             </Box>
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" color="textSecondary">
-                {metrics?.postgresql?.currentSizeGB || 0} GB / {metrics?.postgresql?.estimatedLimitGB || 0} GB
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                {metrics?.postgresql?.activeConnections || 0} / {metrics?.postgresql?.maxConnections || 100} connections
-              </Typography>
-            </Box>
+            
+            <UsageBar
+              label="Storage"
+              sublabel={`${formatBytesGB(metrics?.postgresql?.currentSizeBytes || 0)} / ${formatBytesGB(metrics?.postgresql?.storageLimitGB * 1024 * 1024 * 1024 || 0)}`}
+              value={metrics?.postgresql?.storageUsagePercent || 0}
+            />
+            <UsageBar
+              label="Connections"
+              sublabel={`${metrics?.postgresql?.activeConnections || 0} / ${metrics?.postgresql?.maxConnections || 100}`}
+              value={metrics?.postgresql?.connectionUsagePercent || 0}
+            />
+
             <Divider sx={{ my: 1.5 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="caption" color="textSecondary">Response Time</Typography>
+              <Typography variant="caption" fontWeight={600} sx={{ color: metrics?.postgresql?.connectionTimeMs < 500 ? '#22c55e' : '#eab308' }}>
+                {metrics?.postgresql?.connectionTimeMs || 0}ms
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Tables</Typography>
               <Typography variant="caption" fontWeight={600}>{metrics?.postgresql?.tableCount || 0}</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-              <Typography variant="caption" color="textSecondary">Last Backup</Typography>
-              <Typography variant="caption" fontWeight={600}>
-                {metrics?.postgresql?.lastBackup?.completedAt
-                  ? new Date(metrics.postgresql.lastBackup.completedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
-                  : 'Never'}
-              </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="caption" color="textSecondary">Backups (7d)</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.postgresql?.backupCount7Days || 0}</Typography>
             </Box>
+
+            {metrics?.postgresql?.growthTrend && (
+              <Box sx={{ mt: 1.5, p: 1, bgcolor: '#f8fafc', borderRadius: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  {metrics.postgresql.growthTrend.direction === 'increasing' ? (
+                    <TrendingUp sx={{ fontSize: 14, color: '#f97316' }} />
+                  ) : (
+                    <TrendingDown sx={{ fontSize: 14, color: '#22c55e' }} />
+                  )}
+                  <Typography variant="caption" color="textSecondary">
+                    Growth: {metrics.postgresql.growthTrend.dailyGrowthFormatted}/day
+                  </Typography>
+                </Box>
+              </Box>
+            )}
           </MetricCard>
         </Grid>
 
         <Grid item xs={12} md={6} lg={3}>
           <MetricCard
             title="Cloudinary"
-            icon={<Cloud sx={{ color: '#3448c5' }} />}
+            icon={<Cloud sx={{ color: '#3448c5', fontSize: 22 }} />}
+            iconColor="#3448c5"
             status={metrics?.cloudinary?.status === 'error' ? 'error' : metrics?.cloudinary?.storagePercent > 70 ? 'warning' : 'healthy'}
           >
-            <ServiceStatusBadge status={metrics?.cloudinary?.status === 'not_configured' ? 'not_configured' : 'healthy'} />
-            <Box sx={{ mt: 2 }}>
-              <UsageBar
-                label="Storage"
-                value={metrics?.cloudinary?.storagePercent || 0}
-              />
-              <UsageBar
-                label="Bandwidth"
-                value={metrics?.cloudinary?.bandwidthPercent || 0}
-              />
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <ServiceStatusBadge status={metrics?.cloudinary?.connected ? 'healthy' : 'not_configured'} />
+              <ConnectionIndicator connected={metrics?.cloudinary?.connected} />
             </Box>
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" color="textSecondary">
-                {formatBytes(metrics?.cloudinary?.storageUsed || 0)} / {formatBytes(metrics?.cloudinary?.storageLimit || 0)}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                {formatBytes(metrics?.cloudinary?.bandwidthUsed || 0)} bandwidth used
-              </Typography>
-            </Box>
+            
+            <UsageBar
+              label="Storage"
+              sublabel={`${formatBytes(metrics?.cloudinary?.storageUsed || 0)} / ${formatBytesGB(metrics?.cloudinary?.storageLimit || 0)}`}
+              value={metrics?.cloudinary?.storagePercent || 0}
+            />
+            <UsageBar
+              label="Bandwidth"
+              sublabel={`${formatBytes(metrics?.cloudinary?.bandwidthUsed || 0)} / ${formatBytesGB(metrics?.cloudinary?.bandwidthLimit || 0)}`}
+              value={metrics?.cloudinary?.bandwidthPercent || 0}
+            />
+
             <Divider sx={{ my: 1.5 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Assets</Typography>
               <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.assetCount?.toLocaleString() || 0}</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Transformations</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.transformations?.toLocaleString() || 0}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.transformationCount?.toLocaleString() || 0}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="caption" color="textSecondary">Plan</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.plan || 'unknown'}</Typography>
             </Box>
           </MetricCard>
         </Grid>
@@ -369,20 +447,25 @@ const SystemHealth = () => {
         <Grid item xs={12} md={6} lg={3}>
           <MetricCard
             title="Google Drive"
-            icon={<Folder sx={{ color: '#1a73e8' }} />}
+            icon={<Folder sx={{ color: '#1a73e8', fontSize: 22 }} />}
+            iconColor="#1a73e8"
             status={metrics?.googleDrive?.status === 'error' ? 'error' : metrics?.googleDrive?.totalBackups === 0 ? 'warning' : 'healthy'}
           >
-            <ServiceStatusBadge status={metrics?.googleDrive?.status || 'unknown'} />
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" color="textSecondary">
-                Total Backups
-              </Typography>
-              <Typography variant="h4" fontWeight="bold" color="primary">
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <ServiceStatusBadge status={metrics?.googleDrive?.connected ? 'healthy' : metrics?.googleDrive?.totalBackups > 0 ? 'healthy' : 'no_backups'} />
+              <ConnectionIndicator connected={metrics?.googleDrive?.connected} />
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
+              <Typography variant="h3" fontWeight="bold" color="primary">
                 {metrics?.googleDrive?.totalBackups || 0}
               </Typography>
+              <Typography variant="body2" color="textSecondary">total backups</Typography>
             </Box>
+
             <Divider sx={{ my: 1.5 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Last Backup</Typography>
               <Typography variant="caption" fontWeight={600}>
                 {metrics?.googleDrive?.lastBackup?.completedAt
@@ -390,57 +473,62 @@ const SystemHealth = () => {
                   : 'Never'}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Last Size</Typography>
               <Typography variant="caption" fontWeight={600}>
-                {metrics?.googleDrive?.lastBackup?.fileSize
-                  ? formatBytes(Number(metrics.googleDrive.lastBackup.fileSize))
-                  : 'N/A'}
+                {metrics?.googleDrive?.lastBackup?.fileSizeFormatted || 'N/A'}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-              <Typography variant="caption" color="textSecondary">Next Run</Typography>
-              <Typography variant="caption" fontWeight={600}>
-                {metrics?.googleDrive?.nextScheduledRun
-                  ? new Date(metrics.googleDrive.nextScheduledRun).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
-                  : 'Not scheduled'}
-              </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="caption" color="textSecondary">Recent (7d)</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.googleDrive?.recentBackupCount || 0}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="caption" color="textSecondary">Retention</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.googleDrive?.retentionDays || 30} days</Typography>
             </Box>
           </MetricCard>
         </Grid>
 
         <Grid item xs={12} md={6} lg={3}>
           <MetricCard
-            title="Render (Backend)"
-            icon={<Hub sx={{ color: '#673ab7' }} />}
+            title="Render Backend"
+            icon={<Hub sx={{ color: '#673ab7', fontSize: 22 }} />}
+            iconColor="#673ab7"
             status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
           >
-            <ServiceStatusBadge status={metrics?.render?.apiHealth === 'healthy' ? 'healthy' : 'degraded'} />
-            <Box sx={{ mt: 2 }}>
-              <UsageBar
-                label="Memory"
-                value={metrics?.render?.memoryUsagePercent || 0}
-              />
-              <UsageBar
-                label="CPU (Load)"
-                value={metrics?.render?.cpuUsage || 0}
-              />
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <ServiceStatusBadge status={metrics?.render?.apiHealth || 'unknown'} />
+              <ConnectionIndicator connected={metrics?.render?.dbConnectionOk} />
+              <Typography variant="caption" color="textSecondary" sx={{ ml: 0.5 }}>DB</Typography>
             </Box>
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" color="textSecondary">
-                {formatBytes(metrics?.render?.memoryUsed || 0)} / {formatBytes(metrics?.render?.memoryTotal || 0)}
-              </Typography>
-            </Box>
+            
+            <UsageBar
+              label="Memory (System)"
+              sublabel={`${formatBytes(metrics?.render?.memoryUsed || 0)} / ${formatBytesGB(metrics?.render?.memoryTotal || 0)}`}
+              value={metrics?.render?.memoryUsagePercent || 0}
+            />
+            <UsageBar
+              label="Heap"
+              sublabel={`${formatBytesMB(metrics?.render?.heapUsed || 0)} / ${formatBytesMB(metrics?.render?.heapTotal || 0)}`}
+              value={metrics?.render?.heapUsagePercent || 0}
+            />
+            <UsageBar
+              label="CPU Load"
+              value={metrics?.render?.cpuUsage || 0}
+            />
+
             <Divider sx={{ my: 1.5 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Uptime</Typography>
               <Typography variant="caption" fontWeight={600}>{metrics?.render?.uptimeFormatted || '0m'}</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Environment</Typography>
               <Typography variant="caption" fontWeight={600}>{metrics?.render?.environment || 'unknown'}</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Error Rate</Typography>
               <Typography variant="caption" fontWeight={600} sx={{ color: metrics?.render?.errorRate > 0 ? '#ef4444' : 'inherit' }}>
                 {metrics?.render?.errorRate || 0}%
@@ -451,23 +539,74 @@ const SystemHealth = () => {
       </Grid>
 
       <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" fontWeight="bold" gutterBottom>Usage Legend</Typography>
+        <Typography variant="h6" fontWeight="bold" gutterBottom>Scheduled Jobs</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <CardContent sx={{ p: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Schedule sx={{ color: '#8B5CF6' }} />
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={600}>Daily Database Backup</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Schedule: {metrics?.cron?.schedule || '0 2 * * *'} ({metrics?.cron?.timezone || 'Asia/Kolkata'})
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <ServiceStatusBadge status={metrics?.cron?.status || 'unknown'} />
+                </Box>
+                <Divider sx={{ my: 1.5 }} />
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Last Run</Typography>
+                    <Typography variant="body2" fontWeight={500}>
+                      {metrics?.cron?.lastRun
+                        ? new Date(metrics.cron.lastRun).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
+                        : 'Never'}
+                    </Typography>
+                    {metrics?.cron?.lastRunStatus && (
+                      <Chip 
+                        label={metrics.cron.lastRunStatus === 'success' ? 'Success' : 'Failed'} 
+                        size="small"
+                        color={metrics.cron.lastRunStatus === 'success' ? 'success' : 'error'}
+                        sx={{ mt: 0.5, height: 20, fontSize: '0.65rem' }}
+                      />
+                    )}
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Next Run</Typography>
+                    <Typography variant="body2" fontWeight={500}>
+                      {metrics?.cron?.nextRun
+                        ? new Date(metrics.cron.nextRun).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
+                        : 'Not scheduled'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Box>
+
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" fontWeight="bold" gutterBottom>Usage Thresholds</Typography>
         <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#dcfce7', border: '1px solid #22c55e' }} />
-            <Typography variant="caption">Green: &lt;70% (Good)</Typography>
+            <Typography variant="caption">&lt;70% Good</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#fef9c3', border: '1px solid #eab308' }} />
-            <Typography variant="caption">Yellow: 70-85% (Caution)</Typography>
+            <Typography variant="caption">70-85% Caution</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#ffedd5', border: '1px solid #f97316' }} />
-            <Typography variant="caption">Orange: 85-95% (Warning)</Typography>
+            <Typography variant="caption">85-95% Warning</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#fee2e2', border: '1px solid #ef4444' }} />
-            <Typography variant="caption">Red: &gt;95% (Critical)</Typography>
+            <Typography variant="caption">&gt;95% Critical</Typography>
           </Box>
         </Box>
       </Box>
@@ -478,13 +617,16 @@ const SystemHealth = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f8fafc' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Warning sx={{ color: '#eab308' }} />
             <span>System Alerts</span>
             {unreadCount > 0 && <Chip label={`${unreadCount} unread`} size="small" color="warning" />}
           </Box>
-          <Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button size="small" startIcon={<DeleteSweep />} onClick={clearOldAlerts}>
+              Cleanup
+            </Button>
             {unreadCount > 0 && (
               <Button size="small" onClick={markAllRead} startIcon={<CheckCircle />}>
                 Mark All Read
@@ -495,14 +637,14 @@ const SystemHealth = () => {
             </IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent dividers>
+        <DialogContent dividers sx={{ maxHeight: 500 }}>
           {alerts.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <CheckCircle sx={{ fontSize: 48, color: '#22c55e', mb: 1 }} />
-              <Typography color="textSecondary">No alerts at this time</Typography>
+              <Typography color="textSecondary">No alerts at this time. All systems healthy.</Typography>
             </Box>
           ) : (
-            <List>
+            <List disablePadding>
               {alerts.map((alert) => (
                 <ListItem
                   key={alert.id}
@@ -510,40 +652,55 @@ const SystemHealth = () => {
                     bgcolor: alert.isRead ? 'transparent' : '#f0f9ff',
                     borderRadius: 2,
                     mb: 1,
-                    border: '1px solid #e2e8f0'
+                    border: '1px solid #e2e8f0',
+                    flexDirection: 'column',
+                    alignItems: 'stretch'
                   }}
                 >
-                  <ListItemIcon>
-                    {alert.severity === 'critical' || alert.severity === 'error' ? (
-                      <ErrorIcon sx={{ color: '#ef4444' }} />
-                    ) : alert.severity === 'warning' ? (
-                      <Warning sx={{ color: '#eab308' }} />
-                    ) : (
-                      <Info sx={{ color: '#3b82f6' }} />
-                    )}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography fontWeight={alert.isRead ? 400 : 600}>{alert.title}</Typography>
-                        <Chip label={alert.service} size="small" variant="outlined" />
-                      </Box>
-                    }
-                    secondary={
-                      <Box>
-                        <Typography variant="body2" color="textSecondary">{alert.message}</Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {new Date(alert.createdAt).toLocaleString('en-IN')}
-                        </Typography>
-                      </Box>
-                    }
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      {alert.severity === 'critical' ? (
+                        <ErrorIcon sx={{ color: '#ef4444' }} />
+                      ) : alert.severity === 'error' ? (
+                        <ErrorIcon sx={{ color: '#ef4444' }} />
+                      ) : alert.severity === 'warning' ? (
+                        <Warning sx={{ color: '#eab308' }} />
+                      ) : (
+                        <Info sx={{ color: '#3b82f6' }} />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography fontWeight={alert.isRead ? 400 : 600}>{alert.title}</Typography>
+                          {getSeverityChip(alert.severity)}
+                          <Chip label={alert.service} size="small" variant="outlined" />
+                          {alert.metricName && (
+                            <Typography variant="caption" color="textSecondary">
+                              {alert.metricName}: {alert.metricValue}{alert.threshold ? ` (threshold: ${alert.threshold})` : ''}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                      secondary={
+                        <Box sx={{ mt: 0.5 }}>
+                          <Typography variant="body2" color="textSecondary">{alert.message}</Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {new Date(alert.createdAt).toLocaleString('en-IN')}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Box>
                 </ListItem>
               ))}
             </List>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, py: 2, bgcolor: '#f8fafc' }}>
+          <Typography variant="caption" color="textSecondary" sx={{ flex: 1 }}>
+            Alerts auto-generate when thresholds are exceeded. Unread alerts trigger banner warnings.
+          </Typography>
           <Button onClick={() => setAlertsDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
