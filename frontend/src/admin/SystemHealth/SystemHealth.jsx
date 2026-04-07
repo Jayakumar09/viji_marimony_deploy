@@ -4,16 +4,16 @@ import {
   Chip, Alert, IconButton, Switch, FormControlLabel,
   Dialog, DialogTitle, DialogContent, DialogActions, List,
   ListItem, ListItemText, ListItemIcon, Divider, CircularProgress,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Tooltip
+  Snackbar
 } from '@mui/material';
 import {
   Refresh as RefreshIcon, Cloud, Folder, Hub,
   CheckCircle, Warning, Error as ErrorIcon, Info, Close,
   TrendingUp, TrendingDown, Dns, DeleteSweep, Schedule,
-  Storage as StorageIcon, DataUsage, Speed, Timer
+  PlayArrow, Security, Speed, Backup as BackupIcon, NotificationAdd
 } from '@mui/icons-material';
 import api from '../../services/api';
+import toast from 'react-hot-toast';
 
 const formatBytes = (bytes, decimals = 2) => {
   if (bytes === 0) return '0 B';
@@ -46,14 +46,14 @@ const formatUptime = (seconds) => {
 const getUsageColor = (percent) => {
   if (percent < 70) return '#22c55e';
   if (percent < 85) return '#eab308';
-  if (percent < 95) return '#f97316';
+  if (percent < 90) return '#f97316';
   return '#ef4444';
 };
 
 const getUsageBgColor = (percent) => {
   if (percent < 70) return '#dcfce7';
   if (percent < 85) return '#fef9c3';
-  if (percent < 95) return '#ffedd5';
+  if (percent < 90) return '#ffedd5';
   return '#fee2e2';
 };
 
@@ -148,9 +148,7 @@ const MetricCard = ({ title, icon, iconColor, children, status = 'healthy', acti
             }}>
               {icon}
             </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={600}>{title}</Typography>
-            </Box>
+            <Typography variant="h6" fontWeight={600}>{title}</Typography>
           </Box>
           {action}
         </Box>
@@ -163,15 +161,17 @@ const MetricCard = ({ title, icon, iconColor, children, status = 'healthy', acti
 const ServiceStatusBadge = ({ status, size = 'small' }) => {
   const statusConfig = {
     healthy: { color: 'success', label: 'Healthy', icon: <CheckCircle sx={{ fontSize: 14 }} /> },
+    excellent: { color: 'success', label: 'Excellent', icon: <CheckCircle sx={{ fontSize: 14 }} /> },
+    good: { color: 'success', label: 'Good', icon: <CheckCircle sx={{ fontSize: 14 }} /> },
     warning: { color: 'warning', label: 'Warning', icon: <Warning sx={{ fontSize: 14 }} /> },
-    error: { color: 'error', label: 'Error', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
+    slow: { color: 'warning', label: 'Slow', icon: <Speed sx={{ fontSize: 14 }} /> },
     degraded: { color: 'warning', label: 'Degraded', icon: <Warning sx={{ fontSize: 14 }} /> },
+    error: { color: 'error', label: 'Error', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
+    critical: { color: 'error', label: 'Critical', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
     not_configured: { color: 'default', label: 'Not Configured', icon: <Info sx={{ fontSize: 14 }} /> },
     no_backups: { color: 'warning', label: 'No Backups', icon: <Warning sx={{ fontSize: 14 }} /> },
     disabled: { color: 'default', label: 'Disabled', icon: <Info sx={{ fontSize: 14 }} /> },
     scheduled: { color: 'success', label: 'Scheduled', icon: <Schedule sx={{ fontSize: 14 }} /> },
-    excellent: { color: 'success', label: 'Excellent', icon: <CheckCircle sx={{ fontSize: 14 }} /> },
-    slow: { color: 'warning', label: 'Slow', icon: <Warning sx={{ fontSize: 14 }} /> },
     disconnected: { color: 'error', label: 'Disconnected', icon: <ErrorIcon sx={{ fontSize: 14 }} /> },
     unknown: { color: 'default', label: 'Unknown', icon: <Info sx={{ fontSize: 14 }} /> }
   };
@@ -188,16 +188,36 @@ const ServiceStatusBadge = ({ status, size = 'small' }) => {
 };
 
 const ConnectionIndicator = ({ connected }) => (
-  <Tooltip title={connected ? 'Connected' : 'Disconnected'}>
-    <Box sx={{
-      width: 10,
-      height: 10,
-      borderRadius: '50%',
-      bgcolor: connected ? '#22c55e' : '#ef4444',
-      ml: 1
-    }} />
-  </Tooltip>
+  <Box sx={{
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    bgcolor: connected ? '#22c55e' : '#ef4444',
+    ml: 1
+  }} />
 );
+
+const ResponseTimeBadge = ({ ms, color }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+    <Speed sx={{ fontSize: 14, color }} />
+    <Typography variant="caption" fontWeight={600} sx={{ color }}>
+      {ms}ms
+    </Typography>
+  </Box>
+);
+
+const BackupOverdueBadge = ({ hours }) => {
+  const isCritical = hours > 48;
+  return (
+    <Chip
+      icon={<Warning sx={{ fontSize: 14 }} />}
+      label={isCritical ? `Overdue ${Math.floor(hours)}h` : `Last ${Math.floor(hours)}h ago`}
+      size="small"
+      color={isCritical ? 'error' : 'warning'}
+      sx={{ height: 20, fontSize: '0.65rem' }}
+    />
+  );
+};
 
 const SystemHealth = () => {
   const [metrics, setMetrics] = useState(null);
@@ -208,6 +228,8 @@ const SystemHealth = () => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [alertsDialogOpen, setAlertsDialogOpen] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const fetchMetrics = useCallback(async (isManualRefresh = false) => {
     if (isManualRefresh) setRefreshing(true);
@@ -217,6 +239,7 @@ const SystemHealth = () => {
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Failed to fetch metrics:', error);
+      toast.error('Failed to fetch health metrics');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -237,8 +260,9 @@ const SystemHealth = () => {
     try {
       await api.put('/admin/health/alerts/read-all');
       fetchAlerts();
+      toast.success('All alerts marked as read');
     } catch (error) {
-      console.error('Failed to mark alerts read:', error);
+      toast.error('Failed to mark alerts read');
     }
   };
 
@@ -247,8 +271,46 @@ const SystemHealth = () => {
     try {
       await api.delete('/admin/health/alerts/cleanup?days=30');
       fetchAlerts();
+      toast.success('Old alerts cleaned up');
     } catch (error) {
-      console.error('Failed to clear old alerts:', error);
+      toast.error('Failed to clear old alerts');
+    }
+  };
+
+  const executeBackup = async () => {
+    if (!window.confirm('Execute database backup now? This will create a full backup and upload to Google Drive.')) return;
+    
+    setBackupLoading(true);
+    try {
+      const response = await api.post('/admin/health/backup-execute');
+      if (response.data.success) {
+        toast.success('Backup executed successfully!');
+        fetchMetrics(true);
+        fetchAlerts();
+      } else {
+        toast.error(response.data.error || 'Backup failed');
+      }
+    } catch (error) {
+      toast.error('Failed to execute backup');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const runServiceCheck = async () => {
+    setRefreshing(true);
+    try {
+      const response = await api.post('/admin/health/service-check');
+      if (response.data.success) {
+        setMetrics(response.data.metrics);
+        setLastUpdated(new Date());
+        fetchAlerts();
+        toast.success('Service check completed');
+      }
+    } catch (error) {
+      toast.error('Service check failed');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -272,9 +334,9 @@ const SystemHealth = () => {
     if (!metrics) return 'unknown';
     const { postgresql, cloudinary, googleDrive, render } = metrics;
     if (postgresql?.status === 'unhealthy' || render?.status === 'error') return 'error';
-    if (postgresql?.storageUsagePercent > 85 || cloudinary?.storagePercent > 85 || render?.memoryUsagePercent > 85) return 'error';
+    if (postgresql?.storageUsagePercent > 90 || cloudinary?.storagePercent > 90 || render?.memoryUsagePercent > 90) return 'error';
     if (postgresql?.storageUsagePercent > 70 || cloudinary?.storagePercent > 70 || render?.memoryUsagePercent > 70) return 'warning';
-    if (googleDrive?.totalBackups === 0) return 'warning';
+    if (googleDrive?.backupOverdue) return 'warning';
     return 'healthy';
   };
 
@@ -297,15 +359,36 @@ const SystemHealth = () => {
         <Box>
           <Typography variant="h5" fontWeight="bold">System Health & Usage</Typography>
           <Typography variant="body2" color="textSecondary">
-            Real-time infrastructure and service monitoring
+            Real-time infrastructure monitoring with proactive alerts
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<BackupIcon />}
+            onClick={executeBackup}
+            disabled={backupLoading}
+            sx={{ borderRadius: 2, minWidth: 110 }}
+          >
+            {backupLoading ? 'Backing...' : 'Backup Now'}
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Security />}
+            onClick={runServiceCheck}
+            disabled={refreshing}
+            sx={{ borderRadius: 2 }}
+          >
+            Service Check
+          </Button>
           <FormControlLabel
             control={
               <Switch checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} size="small" />
             }
             label="Auto-refresh"
+            sx={{ ml: 1 }}
           />
           <Button
             variant="outlined"
@@ -336,13 +419,13 @@ const SystemHealth = () => {
 
       {overallStatus === 'error' && (
         <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} icon={<ErrorIcon />}>
-          <strong>Critical:</strong> One or more services have errors or critical usage levels. Immediate action required.
+          <strong>Critical:</strong> One or more services have critical issues. Immediate action required.
         </Alert>
       )}
 
       {overallStatus === 'warning' && unreadCount > 0 && (
         <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }} icon={<Warning />}>
-          <strong>Warning:</strong> Services approaching usage limits. Review recommended.
+          <strong>Warning:</strong> Services approaching limits or backup overdue. Review recommended.
         </Alert>
       )}
 
@@ -352,11 +435,12 @@ const SystemHealth = () => {
             title="PostgreSQL"
             icon={<Dns sx={{ color: '#8B5CF6', fontSize: 22 }} />}
             iconColor="#8B5CF6"
-            status={metrics?.postgresql?.status === 'unhealthy' ? 'error' : metrics?.postgresql?.storageUsagePercent > 70 ? 'warning' : 'healthy'}
+            status={metrics?.postgresql?.status === 'unhealthy' ? 'error' : metrics?.postgresql?.storageUsagePercent > 85 ? 'error' : metrics?.postgresql?.storageUsagePercent > 70 ? 'warning' : 'healthy'}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <ServiceStatusBadge status={metrics?.postgresql?.connectionHealth || 'unknown'} />
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
+              <ServiceStatusBadge status={metrics?.postgresql?.responseTimeStatus?.toLowerCase() || 'unknown'} />
               <ConnectionIndicator connected={metrics?.postgresql?.connected} />
+              <ResponseTimeBadge ms={metrics?.postgresql?.avgResponseTimeMs || 0} color={metrics?.postgresql?.responseTimeColor || '#94a3b8'} />
             </Box>
             
             <UsageBar
@@ -373,18 +457,24 @@ const SystemHealth = () => {
             <Divider sx={{ my: 1.5 }} />
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-              <Typography variant="caption" color="textSecondary">Response Time</Typography>
-              <Typography variant="caption" fontWeight={600} sx={{ color: metrics?.postgresql?.connectionTimeMs < 500 ? '#22c55e' : '#eab308' }}>
-                {metrics?.postgresql?.connectionTimeMs || 0}ms
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Tables</Typography>
               <Typography variant="caption" fontWeight={600}>{metrics?.postgresql?.tableCount || 0}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Backups (7d)</Typography>
               <Typography variant="caption" fontWeight={600}>{metrics?.postgresql?.backupCount7Days || 0}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+              <Typography variant="caption" color="textSecondary">Last Backup</Typography>
+              {metrics?.postgresql?.backupOverdue ? (
+                <BackupOverdueBadge hours={metrics?.postgresql?.hoursSinceBackup || 0} />
+              ) : (
+                <Typography variant="caption" fontWeight={600}>
+                  {metrics?.postgresql?.hoursSinceBackup 
+                    ? `${Math.floor(metrics.postgresql.hoursSinceBackup)}h ago` 
+                    : 'Never'}
+                </Typography>
+              )}
             </Box>
 
             {metrics?.postgresql?.growthTrend && (
@@ -409,7 +499,7 @@ const SystemHealth = () => {
             title="Cloudinary"
             icon={<Cloud sx={{ color: '#3448c5', fontSize: 22 }} />}
             iconColor="#3448c5"
-            status={metrics?.cloudinary?.status === 'error' ? 'error' : metrics?.cloudinary?.storagePercent > 70 ? 'warning' : 'healthy'}
+            status={metrics?.cloudinary?.status === 'error' ? 'error' : metrics?.cloudinary?.storagePercent > 85 ? 'error' : metrics?.cloudinary?.storagePercent > 70 ? 'warning' : 'healthy'}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <ServiceStatusBadge status={metrics?.cloudinary?.connected ? 'healthy' : 'not_configured'} />
@@ -449,9 +539,9 @@ const SystemHealth = () => {
             title="Google Drive"
             icon={<Folder sx={{ color: '#1a73e8', fontSize: 22 }} />}
             iconColor="#1a73e8"
-            status={metrics?.googleDrive?.status === 'error' ? 'error' : metrics?.googleDrive?.totalBackups === 0 ? 'warning' : 'healthy'}
+            status={metrics?.googleDrive?.status === 'error' ? 'error' : metrics?.googleDrive?.backupOverdue ? 'warning' : 'healthy'}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
               <ServiceStatusBadge status={metrics?.googleDrive?.connected ? 'healthy' : metrics?.googleDrive?.totalBackups > 0 ? 'healthy' : 'no_backups'} />
               <ConnectionIndicator connected={metrics?.googleDrive?.connected} />
             </Box>
@@ -460,18 +550,22 @@ const SystemHealth = () => {
               <Typography variant="h3" fontWeight="bold" color="primary">
                 {metrics?.googleDrive?.totalBackups || 0}
               </Typography>
-              <Typography variant="body2" color="textSecondary">total backups</Typography>
+              <Typography variant="body2" color="textSecondary">total</Typography>
             </Box>
 
             <Divider sx={{ my: 1.5 }} />
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Last Backup</Typography>
-              <Typography variant="caption" fontWeight={600}>
-                {metrics?.googleDrive?.lastBackup?.completedAt
-                  ? new Date(metrics.googleDrive.lastBackup.completedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
-                  : 'Never'}
-              </Typography>
+              {metrics?.googleDrive?.backupOverdue ? (
+                <BackupOverdueBadge hours={metrics?.googleDrive?.hoursSinceBackup || 0} />
+              ) : (
+                <Typography variant="caption" fontWeight={600}>
+                  {metrics?.googleDrive?.hoursSinceBackup 
+                    ? `${Math.floor(metrics.googleDrive.hoursSinceBackup)}h ago` 
+                    : 'Never'}
+                </Typography>
+              )}
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Last Size</Typography>
@@ -495,16 +589,17 @@ const SystemHealth = () => {
             title="Render Backend"
             icon={<Hub sx={{ color: '#673ab7', fontSize: 22 }} />}
             iconColor="#673ab7"
-            status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
+            status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.memoryUsagePercent > 90 ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
               <ServiceStatusBadge status={metrics?.render?.apiHealth || 'unknown'} />
               <ConnectionIndicator connected={metrics?.render?.dbConnectionOk} />
-              <Typography variant="caption" color="textSecondary" sx={{ ml: 0.5 }}>DB</Typography>
+              <Typography variant="caption" color="textSecondary">DB</Typography>
+              <ResponseTimeBadge ms={metrics?.render?.apiResponseTimeMs || 0} color={metrics?.render?.apiResponseTimeMs < 500 ? '#22c55e' : metrics?.render?.apiResponseTimeMs < 1000 ? '#eab308' : '#ef4444'} />
             </Box>
             
             <UsageBar
-              label="Memory (System)"
+              label="Memory"
               sublabel={`${formatBytes(metrics?.render?.memoryUsed || 0)} / ${formatBytesGB(metrics?.render?.memoryTotal || 0)}`}
               value={metrics?.render?.memoryUsagePercent || 0}
             />
@@ -558,7 +653,7 @@ const SystemHealth = () => {
                 </Box>
                 <Divider sx={{ my: 1.5 }} />
                 <Grid container spacing={2}>
-                  <Grid item xs={6}>
+                  <Grid item xs={4}>
                     <Typography variant="caption" color="textSecondary">Last Run</Typography>
                     <Typography variant="body2" fontWeight={500}>
                       {metrics?.cron?.lastRun
@@ -574,7 +669,13 @@ const SystemHealth = () => {
                       />
                     )}
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" color="textSecondary">Duration</Typography>
+                    <Typography variant="body2" fontWeight={500}>
+                      {metrics?.cron?.lastRunDuration ? `${metrics.cron.lastRunDuration}s` : 'N/A'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={4}>
                     <Typography variant="caption" color="textSecondary">Next Run</Typography>
                     <Typography variant="body2" fontWeight={500}>
                       {metrics?.cron?.nextRun
@@ -590,7 +691,7 @@ const SystemHealth = () => {
       </Box>
 
       <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" fontWeight="bold" gutterBottom>Usage Thresholds</Typography>
+        <Typography variant="h6" fontWeight="bold" gutterBottom>Alert Thresholds</Typography>
         <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#dcfce7', border: '1px solid #22c55e' }} />
@@ -598,15 +699,19 @@ const SystemHealth = () => {
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#fef9c3', border: '1px solid #eab308' }} />
-            <Typography variant="caption">70-85% Caution</Typography>
+            <Typography variant="caption">70-85% Warning</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#ffedd5', border: '1px solid #f97316' }} />
-            <Typography variant="caption">85-95% Warning</Typography>
+            <Typography variant="caption">85-90% Alert</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: 1, bgcolor: '#fee2e2', border: '1px solid #ef4444' }} />
-            <Typography variant="caption">&gt;95% Critical</Typography>
+            <Typography variant="caption">&gt;90% Critical</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 3 }}>
+            <NotificationAdd sx={{ fontSize: 14, color: '#94a3b8' }} />
+            <Typography variant="caption" color="textSecondary">Critical alerts trigger email/SMS</Typography>
           </Box>
         </Box>
       </Box>
@@ -641,7 +746,7 @@ const SystemHealth = () => {
           {alerts.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <CheckCircle sx={{ fontSize: 48, color: '#22c55e', mb: 1 }} />
-              <Typography color="textSecondary">No alerts at this time. All systems healthy.</Typography>
+              <Typography color="textSecondary">No alerts. All systems healthy.</Typography>
             </Box>
           ) : (
             <List disablePadding>
@@ -677,7 +782,7 @@ const SystemHealth = () => {
                           <Chip label={alert.service} size="small" variant="outlined" />
                           {alert.metricName && (
                             <Typography variant="caption" color="textSecondary">
-                              {alert.metricName}: {alert.metricValue}{alert.threshold ? ` (threshold: ${alert.threshold})` : ''}
+                              {alert.metricName}: {alert.metricValue}{alert.threshold ? ` (${alert.threshold}%)` : ''}
                             </Typography>
                           )}
                         </Box>
@@ -699,11 +804,22 @@ const SystemHealth = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, bgcolor: '#f8fafc' }}>
           <Typography variant="caption" color="textSecondary" sx={{ flex: 1 }}>
-            Alerts auto-generate when thresholds are exceeded. Unread alerts trigger banner warnings.
+            Critical alerts trigger email/SMS notifications. Configure HEALTH_ALERT_* env vars to enable.
           </Typography>
           <Button onClick={() => setAlertsDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

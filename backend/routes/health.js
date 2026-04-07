@@ -72,13 +72,28 @@ router.delete('/alerts/cleanup', async (req, res) => {
   }
 });
 
-router.post('/backup-check', async (req, res) => {
+router.post('/backup-execute', async (req, res) => {
   try {
-    const metrics = await healthService.triggerBackupCheck();
+    const adminId = req.admin?.id || 'manual';
+    const result = await healthService.executeBackup(adminId);
+    if (result.success) {
+      res.json({ success: true, result: result.result });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('[Health API] Failed to execute backup:', error.message);
+    res.status(500).json({ error: 'Failed to execute backup' });
+  }
+});
+
+router.post('/service-check', async (req, res) => {
+  try {
+    const metrics = await healthService.runServiceCheck();
     res.json({ success: true, metrics });
   } catch (error) {
-    console.error('[Health API] Failed to trigger backup check:', error.message);
-    res.status(500).json({ error: 'Failed to trigger backup check' });
+    console.error('[Health API] Failed to run service check:', error.message);
+    res.status(500).json({ error: 'Failed to run service check' });
   }
 });
 

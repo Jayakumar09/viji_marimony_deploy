@@ -5,7 +5,14 @@ const os = require('os');
 const ALERT_THRESHOLDS = {
   WARNING: 70,
   ERROR: 85,
-  CRITICAL: 95
+  CRITICAL: 90
+};
+
+const RESPONSE_TIME_THRESHOLDS = {
+  EXCELLENT: 100,
+  GOOD: 500,
+  SLOW: 1000,
+  CRITICAL: 2000
 };
 
 const POSTGRES_LIMITS = {
@@ -14,20 +21,22 @@ const POSTGRES_LIMITS = {
 };
 
 const formatBytes = (bytes, decimals = 2) => {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return '0 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 };
 
-const formatBytesGB = (bytes) => {
-  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+const formatBytesMB = (bytes) => {
+  if (bytes === 0) return '0 MB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 };
 
-const formatBytesMB = (bytes) => {
-  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+const formatBytesGB = (bytes) => {
+  if (bytes === 0) return '0 GB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 };
 
 const getUsageSeverity = (percentage) => {
@@ -35,6 +44,75 @@ const getUsageSeverity = (percentage) => {
   if (percentage < ALERT_THRESHOLDS.ERROR) return 'warning';
   if (percentage < ALERT_THRESHOLDS.CRITICAL) return 'error';
   return 'critical';
+};
+
+const getResponseTimeStatus = (ms) => {
+  if (ms < RESPONSE_TIME_THRESHOLDS.EXCELLENT) return { status: 'excellent', label: 'Excellent', color: '#22c55e' };
+  if (ms < RESPONSE_TIME_THRESHOLDS.GOOD) return { status: 'good', label: 'Good', color: '#22c55e' };
+  if (ms < RESPONSE_TIME_THRESHOLDS.SLOW) return { status: 'slow', label: 'Slow', color: '#eab308' };
+  if (ms < RESPONSE_TIME_THRESHOLDS.CRITICAL) return { status: 'degraded', label: 'Degraded', color: '#f97316' };
+  return { status: 'critical', label: 'Critical', color: '#ef4444' };
+};
+
+const sendNotification = async (alert) => {
+  try {
+    const emailEnabled = process.env.HEALTH_ALERT_EMAIL_ENABLED === 'true';
+    const smsEnabled = process.env.HEALTH_ALERT_SMS_ENABLED === 'true';
+    
+    if (emailEnabled) {
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT) || 587,
+        secure: process.env.SMTP_PORT === '465',
+        auth: {
+          user: process.env.EMAIL_USER || process.env.BUSINESS_EMAIL_USER,
+          pass: process.env.EMAIL_PASS || process.env.BUSINESS_EMAIL_PASS
+        }
+      });
+
+      const adminEmail = process.env.HEALTH_ALERT_EMAIL || 'vijayalakshmijayakumar45@gmail.com';
+      
+      await transporter.sendMail({
+        from: `"Vijayalakshmi Matrimony" <${process.env.FROM_EMAIL || process.env.BUSINESS_EMAIL_USER}>`,
+        to: adminEmail,
+        subject: `[ALERT] ${alert.title}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: ${alert.severity === 'critical' ? '#ef4444' : '#eab308'};">${alert.title}</h2>
+            <p><strong>Service:</strong> ${alert.service}</p>
+            <p><strong>Severity:</strong> ${alert.severity.toUpperCase()}</p>
+            <p><strong>Message:</strong> ${alert.message}</p>
+            ${alert.metricName ? `<p><strong>Metric:</strong> ${alert.metricName} = ${alert.metricValue}${alert.threshold ? ` (threshold: ${alert.threshold}%)` : ''}</p>` : ''}
+            <p><strong>Time:</strong> ${new Date().toISOString()}</p>
+            <hr style="border: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #666; font-size: 12px;">This is an automated alert from System Health monitoring.</p>
+          </div>
+        `
+      });
+      console.log(`[Health] Email notification sent for alert: ${alert.title}`);
+    }
+
+    if (smsEnabled && (alert.severity === 'critical' || alert.severity === 'error')) {
+      const twilio = require('twilio');
+      const client = twilio(
+        process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN
+      );
+      
+      const adminPhone = process.env.HEALTH_ALERT_PHONE;
+      if (adminPhone) {
+        await client.messages.create({
+          body: `[ALERT] ${alert.title}: ${alert.message.substring(0, 100)}`,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: adminPhone
+        });
+        console.log(`[Health] SMS notification sent for alert: ${alert.title}`);
+      }
+    }
+  } catch (error) {
+    console.error('[Health] Failed to send notification:', error.message);
+  }
 };
 
 const shouldCreateAlert = async (service, metricName, value, threshold, severity, customMessage = null) => {
@@ -51,7 +129,7 @@ const shouldCreateAlert = async (service, metricName, value, threshold, severity
 
     if (!existingAlert) {
       const metricValue = typeof value === 'number' ? value.toFixed(1) : value;
-      await prisma.systemAlert.create({
+      const alert = await prisma.systemAlert.create({
         data: {
           service,
           alertType: 'usage_warning',
@@ -63,51 +141,30 @@ const shouldCreateAlert = async (service, metricName, value, threshold, severity
           threshold: String(threshold),
         }
       });
+
+      if (severity === 'critical' || severity === 'error') {
+        await sendNotification(alert);
+      }
+      
+      return alert;
     }
   } catch (error) {
     console.error(`[Health] Failed to create alert for ${service}:${metricName}`, error.message);
   }
 };
 
-const checkBackupFailureAlert = async (errorMessage = null) => {
+const checkBackupAlerts = async () => {
   try {
-    const recentFailures = await prisma.systemAlert.findFirst({
-      where: {
-        service: 'backup',
-        metricName: 'backup_failure',
-        isRead: false,
-        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (!recentFailures) {
-      await prisma.systemAlert.create({
-        data: {
-          service: 'backup',
-          alertType: 'error',
-          severity: 'critical',
-          title: 'Backup Failed',
-          message: errorMessage || 'Scheduled database backup failed. Please check backup configuration.',
-          metricName: 'backup_failure',
-          metricValue: '1',
-          threshold: '0',
-        }
-      });
-    }
-  } catch (error) {
-    console.error('[Health] Failed to create backup failure alert:', error.message);
-  }
-};
-
-const checkNoBackupAlert = async () => {
-  try {
-    const lastSuccessfulBackup = await prisma.backupLog.findFirst({
+    const lastBackup = await prisma.backupLog.findFirst({
       where: { status: 'completed' },
       orderBy: { completedAt: 'desc' }
     });
 
-    if (!lastSuccessfulBackup) {
+    const hoursSinceBackup = lastBackup 
+      ? (Date.now() - new Date(lastBackup.completedAt).getTime()) / (1000 * 60 * 60)
+      : null;
+
+    if (!lastBackup) {
       const existingAlert = await prisma.systemAlert.findFirst({
         where: {
           service: 'backup',
@@ -118,25 +175,21 @@ const checkNoBackupAlert = async () => {
       });
 
       if (!existingAlert) {
-        await prisma.systemAlert.create({
+        const alert = await prisma.systemAlert.create({
           data: {
             service: 'backup',
             alertType: 'error',
             severity: 'critical',
             title: 'No Backup Found',
-            message: 'No successful backup found in the system. Please verify backup is working.',
+            message: 'No successful backup found. Database backup system may be broken.',
             metricName: 'no_backup',
             metricValue: '0',
             threshold: '1',
           }
         });
+        await sendNotification(alert);
       }
-      return;
-    }
-
-    const hoursSinceBackup = (Date.now() - new Date(lastSuccessfulBackup.completedAt).getTime()) / (1000 * 60 * 60);
-    
-    if (hoursSinceBackup > 24) {
+    } else if (hoursSinceBackup > 24) {
       const existingAlert = await prisma.systemAlert.findFirst({
         where: {
           service: 'backup',
@@ -147,11 +200,12 @@ const checkNoBackupAlert = async () => {
       });
 
       if (!existingAlert) {
-        await prisma.systemAlert.create({
+        const severity = hoursSinceBackup > 48 ? 'critical' : 'error';
+        const alert = await prisma.systemAlert.create({
           data: {
             service: 'backup',
             alertType: 'warning',
-            severity: hoursSinceBackup > 48 ? 'error' : 'warning',
+            severity,
             title: 'Backup Overdue',
             message: `Last successful backup was ${Math.floor(hoursSinceBackup)} hours ago. Expected daily backup.`,
             metricName: 'backup_stale',
@@ -159,22 +213,60 @@ const checkNoBackupAlert = async () => {
             threshold: '24',
           }
         });
+        if (severity === 'critical') {
+          await sendNotification(alert);
+        }
       }
     }
   } catch (error) {
-    console.error('[Health] Failed to check backup alert:', error.message);
+    console.error('[Health] Failed to check backup alerts:', error.message);
+  }
+};
+
+const checkResponseTimeAlert = async (service, responseTimeMs) => {
+  if (responseTimeMs >= RESPONSE_TIME_THRESHOLDS.SLOW) {
+    const severity = responseTimeMs >= RESPONSE_TIME_THRESHOLDS.CRITICAL ? 'error' : 'warning';
+    await shouldCreateAlert(
+      service,
+      'response_time',
+      responseTimeMs,
+      RESPONSE_TIME_THRESHOLDS.SLOW,
+      severity,
+      `Slow response time: ${responseTimeMs}ms (threshold: ${RESPONSE_TIME_THRESHOLDS.SLOW}ms)`
+    );
+  }
+};
+
+const checkMemoryCriticalAlert = async (memoryPercent) => {
+  if (memoryPercent >= ALERT_THRESHOLDS.CRITICAL) {
+    await shouldCreateAlert(
+      'render',
+      'memory_critical',
+      memoryPercent,
+      ALERT_THRESHOLDS.CRITICAL,
+      'critical',
+      `Critical memory usage: ${memoryPercent.toFixed(1)}% (threshold: ${ALERT_THRESHOLDS.CRITICAL}%)`
+    );
   }
 };
 
 const checkPostgresHealth = async () => {
+  const responseTimes = [];
   let connection = null;
+  
   try {
     connection = await prisma.$connect();
     
-    const startTime = Date.now();
-    await prisma.$queryRaw`SELECT 1`;
-    const connectionTime = Date.now() - startTime;
+    const measureTime = async (label) => {
+      const start = Date.now();
+      await prisma.$queryRaw`SELECT 1`;
+      const duration = Date.now() - start;
+      responseTimes.push(duration);
+      return duration;
+    };
 
+    const connectionTime = await measureTime('connection');
+    
     const connectionResult = await prisma.$queryRaw`
       SELECT count(*) as count FROM pg_stat_activity WHERE state = 'active'
     `;
@@ -194,22 +286,20 @@ const checkPostgresHealth = async () => {
     const dbUsagePercent = Math.min((dbSizeGB / POSTGRES_LIMITS.storageLimitGB) * 100, 100);
     const connectionUsagePercent = (activeConnections / POSTGRES_LIMITS.maxConnections) * 100;
 
-    const lastBackupResult = await prisma.backupLog.findFirst({
+    const avgResponseTime = responseTimes.length > 0 
+      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
+      : connectionTime;
+    const responseTimeStatus = getResponseTimeStatus(avgResponseTime);
+
+    const lastBackup = await prisma.backupLog.findFirst({
       where: { status: 'completed' },
       orderBy: { completedAt: 'desc' }
     });
 
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-    
-    const weekAgoSizeResult = await prisma.$queryRaw`
-      SELECT pg_database_size(current_database()) as size
-    `;
-    
     const recentBackups = await prisma.backupLog.findMany({
       where: { 
         status: 'completed',
-        completedAt: { gte: weekAgo }
+        completedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
       },
       orderBy: { completedAt: 'desc' }
     });
@@ -226,11 +316,15 @@ const checkPostgresHealth = async () => {
           dailyGrowthBytes: dailyGrowth,
           dailyGrowthFormatted: formatBytesMB(dailyGrowth),
           weeklyGrowthBytes: sizeDiff,
-          weeklyGrowthFormatted: formatBytesMB(sizeDiff),
-          direction: dailyGrowth > 0 ? 'increasing' : 'decreasing'
+          weeklyGrowthFormatted: formatBytesMB(Math.abs(sizeDiff)),
+          direction: sizeDiff > 0 ? 'increasing' : 'decreasing'
         };
       }
     }
+
+    const hoursSinceBackup = lastBackup 
+      ? (Date.now() - new Date(lastBackup.completedAt).getTime()) / (1000 * 60 * 60)
+      : null;
 
     const severity = getUsageSeverity(dbUsagePercent);
     if (dbUsagePercent >= ALERT_THRESHOLDS.WARNING) {
@@ -239,12 +333,18 @@ const checkPostgresHealth = async () => {
     if (connectionUsagePercent >= ALERT_THRESHOLDS.WARNING) {
       await shouldCreateAlert('postgresql', 'connections', connectionUsagePercent, ALERT_THRESHOLDS.WARNING, 'warning');
     }
+    if (avgResponseTime >= RESPONSE_TIME_THRESHOLDS.SLOW) {
+      await checkResponseTimeAlert('postgresql', avgResponseTime);
+    }
 
     return {
       status: 'healthy',
       connected: true,
-      connectionHealth: connectionTime < 500 ? 'excellent' : connectionTime < 1000 ? 'good' : 'slow',
+      connectionHealth: responseTimeStatus.status,
       connectionTimeMs: connectionTime,
+      avgResponseTimeMs: parseFloat(avgResponseTime.toFixed(2)),
+      responseTimeStatus: responseTimeStatus.label,
+      responseTimeColor: responseTimeStatus.color,
       activeConnections,
       maxConnections: POSTGRES_LIMITS.maxConnections,
       connectionUsagePercent: parseFloat(connectionUsagePercent.toFixed(2)),
@@ -254,15 +354,16 @@ const checkPostgresHealth = async () => {
       storageLimitGB: POSTGRES_LIMITS.storageLimitGB,
       storageUsagePercent: parseFloat(dbUsagePercent.toFixed(2)),
       tableCount,
-      indexCount: 0,
-      lastBackup: lastBackupResult ? {
-        fileName: lastBackupResult.fileName,
-        fileSize: lastBackupResult.fileSize ? Number(lastBackupResult.fileSize) : null,
-        fileSizeFormatted: lastBackupResult.fileSize ? formatBytesMB(Number(lastBackupResult.fileSize)) : null,
-        completedAt: lastBackupResult.completedAt,
-        status: lastBackupResult.status,
-        triggeredBy: lastBackupResult.triggeredBy
+      lastBackup: lastBackup ? {
+        fileName: lastBackup.fileName,
+        fileSize: lastBackup.fileSize ? Number(lastBackup.fileSize) : null,
+        fileSizeFormatted: lastBackup.fileSize ? formatBytesMB(Number(lastBackup.fileSize)) : null,
+        completedAt: lastBackup.completedAt,
+        status: lastBackup.status,
+        triggeredBy: lastBackup.triggeredBy
       } : null,
+      hoursSinceBackup: hoursSinceBackup ? parseFloat(hoursSinceBackup.toFixed(1)) : null,
+      backupOverdue: hoursSinceBackup !== null && hoursSinceBackup > 24,
       growthTrend,
       backupCount7Days: recentBackups.length
     };
@@ -273,6 +374,9 @@ const checkPostgresHealth = async () => {
       connected: false,
       connectionHealth: 'disconnected',
       connectionTimeMs: 0,
+      avgResponseTimeMs: 0,
+      responseTimeStatus: 'Error',
+      responseTimeColor: '#ef4444',
       error: error.message,
       activeConnections: 0,
       maxConnections: POSTGRES_LIMITS.maxConnections,
@@ -283,8 +387,9 @@ const checkPostgresHealth = async () => {
       storageLimitGB: POSTGRES_LIMITS.storageLimitGB,
       storageUsagePercent: 0,
       tableCount: 0,
-      indexCount: 0,
       lastBackup: null,
+      hoursSinceBackup: null,
+      backupOverdue: false,
       growthTrend: null,
       backupCount7Days: 0
     };
@@ -305,7 +410,7 @@ const checkCloudinaryHealth = async () => {
         !process.env.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET.includes('your_')) {
       return {
         status: 'not_configured',
-        message: 'Cloudinary not configured or using placeholder credentials',
+        message: 'Cloudinary not configured',
         connected: false,
         storageUsed: 0,
         storageLimit: 0,
@@ -332,14 +437,11 @@ const checkCloudinaryHealth = async () => {
     const assetCount = result.resources?.count || 0;
     const transformationCount = result.transformations?.count || 0;
 
-    const storageSeverity = getUsageSeverity(storagePercent);
-    const bandwidthSeverity = getUsageSeverity(bandwidthPercent);
-
     if (storagePercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('cloudinary', 'storage', storagePercent, ALERT_THRESHOLDS.WARNING, storageSeverity);
+      await shouldCreateAlert('cloudinary', 'storage', storagePercent, ALERT_THRESHOLDS.WARNING, getUsageSeverity(storagePercent));
     }
     if (bandwidthPercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('cloudinary', 'bandwidth', bandwidthPercent, ALERT_THRESHOLDS.WARNING, bandwidthSeverity);
+      await shouldCreateAlert('cloudinary', 'bandwidth', bandwidthPercent, ALERT_THRESHOLDS.WARNING, getUsageSeverity(bandwidthPercent));
     }
 
     return {
@@ -399,7 +501,8 @@ const checkGoogleDriveHealth = async () => {
             fileSize: files[0].size,
             fileSizeFormatted: formatBytes(files[0].size),
             completedAt: files[0].createdTime,
-            googleDriveId: files[0].id
+            googleDriveId: files[0].id,
+            location: 'google_drive'
           };
         }
 
@@ -407,18 +510,33 @@ const checkGoogleDriveHealth = async () => {
         recentBackups = files.filter(f => new Date(f.createdTime) >= oneWeekAgo);
       }
     } catch (gdError) {
-      console.error('[Health] Google Drive service error:', gdError.message);
+      console.log('[Health] Google Drive service not available, using BackupLog');
     }
 
     const backupLogs = await prisma.backupLog.findMany({
       where: { status: 'completed' },
       orderBy: { completedAt: 'desc' },
-      take: 10
+      take: 1
     });
 
     const lastBackupLog = backupLogs[0];
-    const hasRecentBackup = lastBackupLog && 
-      (Date.now() - new Date(lastBackupLog.completedAt).getTime()) < 25 * 60 * 60 * 1000;
+    
+    if (!lastBackup && lastBackupLog) {
+      lastBackup = {
+        fileName: lastBackupLog.fileName,
+        fileSize: lastBackupLog.fileSize ? Number(lastBackupLog.fileSize) : null,
+        fileSizeFormatted: lastBackupLog.fileSize ? formatBytesMB(Number(lastBackupLog.fileSize)) : null,
+        completedAt: lastBackupLog.completedAt,
+        triggeredBy: lastBackupLog.triggeredBy,
+        location: lastBackupLog.googleDriveId ? 'google_drive' : 'local'
+      };
+    }
+
+    const hoursSinceBackup = lastBackup 
+      ? (Date.now() - new Date(lastBackup.completedAt).getTime()) / (1000 * 60 * 60)
+      : null;
+
+    await checkBackupAlerts();
 
     let nextScheduledRun = null;
     const hour = process.env.BACKUP_CRON_HOUR || '2';
@@ -430,27 +548,14 @@ const checkGoogleDriveHealth = async () => {
       nextScheduledRun.setDate(nextScheduledRun.getDate() + 1);
     }
 
-    await checkNoBackupAlert();
-
-    if (!hasRecentBackup && lastBackupLog) {
-      const hoursSince = (Date.now() - new Date(lastBackupLog.completedAt).getTime()) / (1000 * 60 * 60);
-      if (hoursSince > 24) {
-        await checkNoBackupAlert();
-      }
-    }
-
     return {
-      status: totalBackups > 0 ? 'healthy' : 'no_backups',
+      status: totalBackups > 0 || lastBackup ? 'healthy' : 'no_backups',
       connected: googleDriveConnected,
       googleDriveConfigured: googleDriveConnected,
-      totalBackups,
-      lastBackup: lastBackup || (lastBackupLog ? {
-        fileName: lastBackupLog.fileName,
-        fileSize: lastBackupLog.fileSize ? Number(lastBackupLog.fileSize) : null,
-        fileSizeFormatted: lastBackupLog.fileSize ? formatBytesMB(Number(lastBackupLog.fileSize)) : null,
-        completedAt: lastBackupLog.completedAt,
-        triggeredBy: lastBackupLog.triggeredBy
-      } : null),
+      totalBackups: Math.max(totalBackups, backupLogs.length),
+      lastBackup,
+      hoursSinceBackup: hoursSinceBackup ? parseFloat(hoursSinceBackup.toFixed(1)) : null,
+      backupOverdue: hoursSinceBackup !== null && hoursSinceBackup > 24,
       nextScheduledRun: nextScheduledRun.toISOString(),
       recentBackupCount: recentBackups.length,
       retentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS) || 30,
@@ -458,13 +563,14 @@ const checkGoogleDriveHealth = async () => {
     };
   } catch (error) {
     console.error('[Health] Google Drive check failed:', error.message);
-    await checkBackupFailureAlert(error.message);
     return {
       status: 'error',
       connected: false,
       error: error.message,
       totalBackups: 0,
       lastBackup: null,
+      hoursSinceBackup: null,
+      backupOverdue: false,
       nextScheduledRun: null,
       recentBackupCount: 0
     };
@@ -481,6 +587,7 @@ const checkCronJobHealth = async () => {
   
   let lastRun = null;
   let lastRunStatus = null;
+  let lastRunDuration = null;
   
   try {
     const lastBackupJob = await prisma.backupLog.findFirst({
@@ -491,6 +598,7 @@ const checkCronJobHealth = async () => {
     if (lastBackupJob) {
       lastRun = lastBackupJob.completedAt;
       lastRunStatus = lastBackupJob.status === 'completed' ? 'success' : 'failed';
+      lastRunDuration = lastBackupJob.duration;
     }
   } catch (e) {}
 
@@ -508,6 +616,7 @@ const checkCronJobHealth = async () => {
     minute: parseInt(minute),
     lastRun,
     lastRunStatus,
+    lastRunDuration,
     nextRun: nextRun.toISOString(),
     enabled: isProduction || isRender,
     environment: isProduction ? 'production' : 'development'
@@ -535,6 +644,7 @@ const checkRenderHealth = async () => {
     let apiHealth = 'healthy';
     let errorRate = 0;
     let dbConnectionOk = false;
+    let responseTimeMs = 0;
 
     try {
       const startTime = Date.now();
@@ -542,8 +652,11 @@ const checkRenderHealth = async () => {
       await prisma.$queryRaw`SELECT 1`;
       await prisma.$disconnect();
       dbConnectionOk = true;
-      const responseTime = Date.now() - startTime;
-      apiHealth = responseTime < 500 ? 'healthy' : responseTime < 2000 ? 'degraded' : 'unhealthy';
+      responseTimeMs = Date.now() - startTime;
+      apiHealth = responseTimeMs < RESPONSE_TIME_THRESHOLDS.EXCELLENT ? 'healthy' 
+                : responseTimeMs < RESPONSE_TIME_THRESHOLDS.GOOD ? 'healthy'
+                : responseTimeMs < RESPONSE_TIME_THRESHOLDS.SLOW ? 'degraded' 
+                : 'unhealthy';
     } catch (e) {
       apiHealth = 'unhealthy';
       errorRate = 100;
@@ -555,11 +668,14 @@ const checkRenderHealth = async () => {
     if (memUsagePercent >= ALERT_THRESHOLDS.WARNING) {
       await shouldCreateAlert('render', 'memory', memUsagePercent, ALERT_THRESHOLDS.WARNING, getUsageSeverity(memUsagePercent));
     }
+    if (memUsagePercent >= ALERT_THRESHOLDS.CRITICAL) {
+      await checkMemoryCriticalAlert(memUsagePercent);
+    }
     if (cpuUsage >= ALERT_THRESHOLDS.WARNING) {
       await shouldCreateAlert('render', 'cpu', cpuUsage, ALERT_THRESHOLDS.WARNING, getUsageSeverity(cpuUsage));
     }
-    if (heapUsagePercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('render', 'heap', heapUsagePercent, ALERT_THRESHOLDS.WARNING, getUsageSeverity(heapUsagePercent));
+    if (responseTimeMs >= RESPONSE_TIME_THRESHOLDS.SLOW) {
+      await checkResponseTimeAlert('api', responseTimeMs);
     }
 
     return {
@@ -574,12 +690,14 @@ const checkRenderHealth = async () => {
       heapTotal,
       heapUsagePercent: parseFloat(heapUsagePercent.toFixed(2)),
       heapUsedFormatted: formatBytesMB(heapUsed),
+      heapTotalFormatted: formatBytesMB(heapTotal),
       cpuUsage: parseFloat(cpuUsage.toFixed(2)),
       cpuCores: os.cpus().length,
       cpuLoad: cpuLoad.map(l => parseFloat(l.toFixed(2))),
       uptime: serverUptimeSeconds,
       uptimeFormatted: formatUptime(serverUptimeSeconds),
       apiHealth,
+      apiResponseTimeMs: responseTimeMs,
       dbConnectionOk,
       errorRate,
       environment: isProduction ? 'production' : 'development',
@@ -598,6 +716,7 @@ const checkRenderHealth = async () => {
       uptime: 0,
       uptimeFormatted: '0s',
       apiHealth: 'unknown',
+      apiResponseTimeMs: 0,
       dbConnectionOk: false,
       errorRate: 100
     };
@@ -708,8 +827,19 @@ const getUnreadAlertCount = async () => {
   }
 };
 
-const triggerBackupCheck = async () => {
-  await checkNoBackupAlert();
+const executeBackup = async (adminId = 'manual') => {
+  try {
+    const backupController = require('../controllers/backupController');
+    const result = await backupController.createBackup(adminId);
+    return { success: true, result };
+  } catch (error) {
+    console.error('[Health] Manual backup failed:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+const runServiceCheck = async () => {
+  await checkBackupAlerts();
   const metrics = await getAllHealthMetrics();
   return metrics;
 };
@@ -726,9 +856,11 @@ module.exports = {
   markAllAlertsRead,
   clearOldAlerts,
   getUnreadAlertCount,
-  triggerBackupCheck,
+  executeBackup,
+  runServiceCheck,
   getUsageSeverity,
   formatUptime,
   formatBytes,
-  ALERT_THRESHOLDS
+  ALERT_THRESHOLDS,
+  RESPONSE_TIME_THRESHOLDS
 };
