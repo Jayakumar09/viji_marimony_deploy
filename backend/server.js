@@ -170,6 +170,7 @@ const profilePdfRoutes = require('./routes/profilePdf');
 const activityLogsModule = require('./modules/ActivityLogs/ActivityLogs');
 const generateSharedProfile = require('./routes/generateSharedProfile');
 const backupRoutes = require('./routes/backup');
+const healthRoutes = require('./routes/health');
 
 // SSE Service for real-time updates
 const sseService = require('./services/sseService');
@@ -232,6 +233,7 @@ app.use('/api/profile-pdf', profilePdfRoutes);
 app.use('/api/activity-logs', activityLogsModule.router);
 app.use('/api/shared-profile', generateSharedProfile);
 app.use('/api/admin/backup', backupRoutes);
+app.use('/api/admin/health', healthRoutes);
 
 // ============================================
 // SSE endpoint for real-time updates

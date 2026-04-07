@@ -15,7 +15,7 @@ import {
   MoreVert, Block, Check, Close, Star, Email, Phone, LocationOn,
   CalendarToday, VerifiedUser,PendingActions, History, AttachMoney, Edit, Chat,
   Send as SendIcon, Delete as DeleteIcon, Image as ImageIcon, Share,
-  Person, Payment, Login, CloudDone, Backup
+  Person, Payment, Login, CloudDone, Backup, MonitorHeart
 } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -28,6 +28,7 @@ import ActivityLogsPage from '../admin/ActivityLogs/ActivityLogs.jsx';
 import toast from 'react-hot-toast';
 import PaymentVerificationTest from './PaymentVerificationTest';
 import PaymentVerificationModal from '../components/PaymentVerificationModal';
+import SystemHealth from '../admin/SystemHealth/SystemHealth';
 
 // Sidebar width
 const DRAWER_WIDTH = 280;
@@ -146,6 +147,7 @@ const AdminPanel = () => {
     { text: 'Client Chat', icon: <Chat />, path: '/admin/chat', chatBadge: true },
     { text: 'DB Backup', icon: <Backup />, path: '/admin/backup' },
     { text: 'Activity Logs', icon: <History />, path: '/admin/logs' },
+    { text: 'System Health', icon: <MonitorHeart />, path: '/admin/health' },
     { text: 'Settings', icon: <Settings />, path: '/admin/settings' },
   ];
 
@@ -353,6 +355,7 @@ const AdminPanel = () => {
           <Route path="/chat" element={<AdminChat />} />
           <Route path="/backup" element={<DatabaseBackup />} />
           <Route path="/logs" element={<ActivityLogsPage />} />
+          <Route path="/health" element={<SystemHealth />} />
           <Route path="/settings" element={<AdminSettings />} />
         </Routes>
       </Box>

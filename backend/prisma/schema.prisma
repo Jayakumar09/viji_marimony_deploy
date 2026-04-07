@@ -488,3 +488,48 @@ model ActivityLog {
   @@index([createdAt])
   @@map("activity_logs")
 }
+
+// System Alerts Model - Store alerts for system health monitoring
+model SystemAlert {
+  id          String   @id @default(cuid())
+  service     String                      // 'postgresql', 'cloudinary', 'google_drive', 'render', 'api'
+  alertType   String                      // 'usage_warning', 'limit_warning', 'error', 'info', 'recovery'
+  severity    String   @default("warning")  // 'info', 'warning', 'error', 'critical'
+  title       String
+  message     String
+  metricName  String?                      // e.g., 'storage_used', 'connection_count'
+  metricValue String?                      // Current value
+  threshold   String?                      // Threshold that triggered alert
+  isRead      Boolean  @default(false) @map("is_read")
+  readAt      DateTime? @map("read_at")
+  readBy      String?  @map("read_by")
+  metadata    String?                      // JSON metadata for additional info
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([service])
+  @@index([alertType])
+  @@index([severity])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("system_alerts")
+}
+
+// Backup Log Model - Track backup history
+model BackupLog {
+  id            String   @id @default(cuid())
+  backupType    String   @map("backup_type")   // 'full', 'incremental', 'config'
+  status        String   @default("pending")   // 'pending', 'in_progress', 'completed', 'failed'
+  fileName       String?  @map("file_name")
+  fileSize       BigInt?  @map("file_size")
+  duration      Int?     @default(0)           // Duration in seconds
+  googleDriveId  String?  @map("google_drive_id")
+  errorMessage   String?  @map("error_message")
+  triggeredBy   String?  @map("triggered_by")  // 'scheduled', 'manual'
+  createdAt      DateTime @default(now()) @map("created_at")
+  completedAt    DateTime? @map("completed_at")
+
+  @@index([backupType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("backup_logs")
+}
