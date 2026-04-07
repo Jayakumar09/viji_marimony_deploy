@@ -259,7 +259,7 @@ const createBackup = async (adminId = null) => {
       fileName: backupResult?.name || path.basename(localFilePath),
       fileId: backupResult?.id,
       location: USE_GOOGLE_DRIVE ? 'google_drive' : 'local',
-      size: fs.statSync(localFilePath).size,
+      size: backupResult?.size || (fs.existsSync(localFilePath) ? fs.statSync(localFilePath).size : 0),
       duration: parseFloat(duration),
       createdAt: new Date().toISOString()
     };
