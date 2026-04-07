@@ -15,8 +15,14 @@ const { maskIdNumber, getLastDigits } = require('../utils/maskUtils');
 const { requireAdmin, requirePasswordVerification } = require('../middleware/roleMiddleware');
 const { adminAuthMiddleware } = require('../middleware/auth');
 
-// Import AI verification module
-const aiVerification = require('../ai-verification');
+// Supported ID types for manual verification
+const SUPPORTED_ID_TYPES = [
+  { type: 'AADHAAR', name: 'Aadhaar Card', format: /^[\d]{12}$/ },
+  { type: 'PAN', name: 'PAN Card', format: /^[A-Z]{5}[\d]{4}[A-Z]$/ },
+  { type: 'VOTER_ID', name: 'Voter ID', format: /^[A-Z]{3}[\d]{7}$/ },
+  { type: 'PASSPORT', name: 'Passport', format: /^[A-Z]{1,2}[\d]{7}$/ },
+  { type: 'DRIVING_LICENSE', name: 'Driving License', format: /^[\w]{5,20}$/ }
+];
 
 /**
  * Helper function to log admin activity to BOTH tables
@@ -435,108 +441,9 @@ router.get('/verifications/:id/logs', async (req, res) => {
 });
 
 /**
- * POST /admin/verifications/:id/reprocess
- * Reprocess AI verification
+ * GET /admin/verifications/:id/logs
+ * Get reveal logs for a verification
  */
-router.post('/verifications/:id/reprocess', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const verification = await prisma.verification.findUnique({
-      where: { id }
-    });
-
-    if (!verification) {
-      return res.status(404).json({ error: 'Verification not found' });
-    }
-
-    // Run AI verification again
-    const aiResult = await aiVerification.processVerification({
-      idImagePath: verification.idImagePath,
-      selfiePath: verification.selfiePath,
-      idType: verification.idType
-    });
-
-    // Update verification with new AI results
-    const updated = await prisma.verification.update({
-      where: { id },
-      data: {
-        aiStatus: aiResult.recommendation,
-        aiConfidenceScore: aiResult.confidence,
-        aiRecommendation: aiResult.recommendation,
-        tamperFlag: aiResult.flags?.includes('High tamper risk detected') || false,
-        tamperRiskLevel: aiResult.details?.tamperDetection?.riskLevel,
-        faceMatchScore: aiResult.details?.faceMatch?.confidence,
-        formatValid: aiResult.details?.documentValidation?.details?.formatValid ?? true,
-        aiFlags: JSON.stringify(aiResult.flags),
-        aiSummary: aiResult.summary,
-        aiProcessedAt: new Date()
-      }
-    });
-
-    res.json({
-      message: 'AI verification reprocessed',
-      aiResult: {
-        recommendation: aiResult.recommendation,
-        confidence: aiResult.confidence,
-        flags: aiResult.flags,
-        summary: aiResult.summary
-      },
-      verification: {
-        ...updated,
-        encryptedIdNumber: undefined
-      }
-    });
-  } catch (error) {
-    console.error('Reprocess verification error:', error);
-    res.status(500).json({ error: 'Failed to reprocess verification' });
-  }
-});
-
-/**
- * GET /admin/verifications/stats/summary
- * Get verification statistics
- */
-router.get('/stats/summary', async (req, res) => {
-  try {
-    const stats = await prisma.$transaction([
-      prisma.verification.count(),
-      prisma.verification.count({ where: { status: 'PENDING' } }),
-      prisma.verification.count({ where: { status: 'APPROVED' } }),
-      prisma.verification.count({ where: { status: 'REJECTED' } }),
-      prisma.verification.count({ where: { aiRecommendation: 'APPROVE' } }),
-      prisma.verification.count({ where: { aiRecommendation: 'REVIEW' } }),
-      prisma.verification.count({ where: { aiRecommendation: 'REJECT' } }),
-      prisma.verification.count({ where: { tamperFlag: true } })
-    ]);
-
-    res.json({
-      total: stats[0],
-      byStatus: {
-        pending: stats[1],
-        approved: stats[2],
-        rejected: stats[3]
-      },
-      byAiRecommendation: {
-        approve: stats[4],
-        review: stats[5],
-        reject: stats[6]
-      },
-      tamperFlags: stats[7]
-    });
-  } catch (error) {
-    console.error('Get stats error:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
-  }
-});
-
-/**
- * GET /admin/id-types
- * Get supported ID types
- */
-router.get('/id-types', (req, res) => {
-  const idTypes = aiVerification.getSupportedIdTypes();
-  res.json({ idTypes });
-});
+router.get('/verifications/:id/logs', async (req, res) => {
 
 module.exports = router;
