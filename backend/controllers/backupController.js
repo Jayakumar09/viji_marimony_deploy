@@ -30,21 +30,40 @@ const generatePostgresDump = async () => {
     throw new Error('DATABASE_URL not configured');
   }
 
-  const tempFile = path.join(BACKUP_FOLDER, getBackupFileName());
   ensureBackupFolder();
+  const tempFile = path.join(BACKUP_FOLDER, getBackupFileName());
 
   let command;
-  if (dbUrl.includes('sslmode=require')) {
-    command = `pg_dump "${dbUrl}" -f "${tempFile}" --no-owner --no-acl`;
+  let dbHost = 'unknown';
+  try {
+    const urlMatch = dbUrl.match(/@([^:]+):/);
+    if (urlMatch) dbHost = urlMatch[1];
+  } catch (e) {}
+  
+  if (dbUrl.includes('sslmode=require') || dbUrl.includes('pg')) {
+    command = `pg_dump "${dbUrl}" -f "${tempFile}" --no-owner --no-acl -w`;
   } else {
     command = `pg_dump "${dbUrl}" -f "${tempFile}" --no-owner --no-acl`;
   }
 
   console.log('[Backup] Generating PostgreSQL dump...');
+  console.log('[Backup] Target host:', dbHost);
+  console.log('[Backup] Output file:', tempFile);
+  console.log('[Backup] Backup folder exists:', fs.existsSync(BACKUP_FOLDER));
   
   try {
     await execAsync(command, { timeout: 300000 });
+    
+    if (!fs.existsSync(tempFile)) {
+      const files = fs.readdirSync(BACKUP_FOLDER);
+      console.error('[Backup] pg_dump completed but file not found. Files in backup folder:', files);
+      throw new Error(`pg_dump completed but backup file not found at: ${tempFile}`);
+    }
+    
     const stats = fs.statSync(tempFile);
+    if (stats.size === 0) {
+      throw new Error(`pg_dump created empty file: ${tempFile}`);
+    }
     console.log(`[Backup] Dump created: ${tempFile} (${stats.size} bytes)`);
     return tempFile;
   } catch (error) {
