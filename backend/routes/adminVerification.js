@@ -440,10 +440,4 @@ router.get('/verifications/:id/logs', async (req, res) => {
   }
 });
 
-/**
- * GET /admin/verifications/:id/logs
- * Get reveal logs for a verification
- */
-router.get('/verifications/:id/logs', async (req, res) => {
-
 module.exports = router;
