@@ -221,11 +221,13 @@ const createBackup = async (adminId = null) => {
   const startTime = Date.now();
   let backupResult = null;
   let localFilePath = null;
+  let localFileSize = 0;
 
   try {
     console.log('[Backup] Starting backup process...');
 
     localFilePath = await generatePostgresDump();
+    localFileSize = fs.statSync(localFilePath).size;
     
     if (USE_GOOGLE_DRIVE) {
       backupResult = await uploadToGoogleDrive(localFilePath);
@@ -240,7 +242,7 @@ const createBackup = async (adminId = null) => {
       details: `Backup completed in ${duration}s`,
       metadata: {
         fileName: backupResult?.name || path.basename(localFilePath),
-        fileSize: fs.statSync(localFilePath).size,
+        fileSize: localFileSize,
         location: USE_GOOGLE_DRIVE ? 'google_drive' : 'local',
         driveFileId: backupResult?.id,
         duration: parseFloat(duration),
@@ -259,7 +261,7 @@ const createBackup = async (adminId = null) => {
       fileName: backupResult?.name || path.basename(localFilePath),
       fileId: backupResult?.id,
       location: USE_GOOGLE_DRIVE ? 'google_drive' : 'local',
-      size: backupResult?.size || (fs.existsSync(localFilePath) ? fs.statSync(localFilePath).size : 0),
+      size: localFileSize,
       duration: parseFloat(duration),
       createdAt: new Date().toISOString()
     };
