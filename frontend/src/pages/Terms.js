@@ -485,25 +485,25 @@ const Terms = () => {
             </Box>
 
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 2, mb: 1 }}>
-              6.2 AI Verification Mandatory for Paid Tiers
+              6.2 Profile Verification Mandatory for Paid Tiers
             </Typography>
             <Typography variant="body2" paragraph>
-              <strong>AI verification is mandatory for all paid subscription tiers.</strong> Upgrading to a paid plan does NOT bypass our profile guidelines. All paid members must complete the AI verification process which includes:
+              <strong>Profile verification is mandatory for all paid subscription tiers.</strong> Upgrading to a paid plan does NOT bypass our profile guidelines. All paid members must complete the verification process which includes:
             </Typography>
             <Box component="ul" sx={{ pl: 2 }}>
-              <li><Typography variant="body2">Face verification (selfie vs. profile photo matching)</Typography></li>
-              <li><Typography variant="body2">Document verification (ID proof)</Typography></li>
-              <li><Typography variant="body2">Profile authenticity validation</Typography></li>
+              <li><Typography variant="body2">Email verification</Typography></li>
+              <li><Typography variant="body2">Phone verification</Typography></li>
+              <li><Typography variant="body2">Profile photo verification (admin approved)</Typography></li>
             </Box>
             <Typography variant="body2" sx={{ mt: 1, p: 1, bgcolor: '#fff3e0', borderRadius: 1 }}>
-              <strong>Note:</strong> Until AI verification is completed, your paid features will not be fully activated. Premium features are contingent upon successful verification.
+              <strong>Note:</strong> Until profile verification is completed, your paid features will not be fully activated. Premium features are contingent upon successful verification.
             </Typography>
 
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 2, mb: 1 }}>
               6.3 Profile Sharing
             </Typography>
             <Typography variant="body2" paragraph>
-              Our AI verification system uses facial recognition and document validation to ensure profile authenticity. By using our services, you consent to AI processing of your photos and documents for verification purposes.
+              Our verification system ensures profile authenticity through manual admin review. By using our services, you consent to our team reviewing your photos and documents for verification purposes.
             </Typography>
 
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 2, mb: 1 }}>

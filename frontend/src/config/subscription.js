@@ -71,7 +71,7 @@ export const getDefaultPlans = () => {
       price: 2000,
       duration: 90,
       successFee: 50000,
-      features: ['All Basic features', 'Profile search & matching (Higher visibility)', 'Express interest in profiles', 'View contact details', 'Priority listing', 'AI verification badge']
+      features: ['All Basic features', 'Profile search & matching (Higher visibility)', 'Express interest in profiles', 'View contact details', 'Priority listing', 'Verified badge']
     },
     {
       id: 'PREMIUM',
@@ -79,7 +79,7 @@ export const getDefaultPlans = () => {
       price: 5000,
       duration: 180,
       successFee: 100000,
-      features: ['All Pro features', 'Profile search & matching (Highest visibility)', 'Express interest in profiles', 'View contact details', 'Priority listing', 'AI verification badge', 'Profile highlighting', 'Dedicated support']
+      features: ['All Pro features', 'Profile search & matching (Highest visibility)', 'Express interest in profiles', 'View contact details', 'Priority listing', 'Verified badge', 'Profile highlighting', 'Dedicated support']
     }
   ];
 };

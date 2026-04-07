@@ -7,12 +7,12 @@ const About = () => {
     {
       icon: <Search sx={{ fontSize: 40, color: '#8B5CF6' }} />,
       title: 'Smart Matching',
-      description: 'Our AI-powered algorithm matches you with compatible partners based on preferences, compatibility, and profile completeness.'
+      description: 'Our advanced matching algorithm connects you with compatible partners based on preferences, compatibility, and profile completeness.'
     },
     {
       icon: <Verified sx={{ fontSize: 40, color: '#8B5CF6' }} />,
-      title: 'AI Verification',
-      description: 'Every profile is verified using advanced AI technology to ensure authenticity and reduce fake profiles.'
+      title: 'Profile Verification',
+      description: 'Every profile is manually verified by our team to ensure authenticity and reduce fake profiles.'
     },
     {
       icon: <Favorite sx={{ fontSize: 40, color: '#8B5CF6' }} />,
