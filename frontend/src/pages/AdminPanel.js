@@ -89,29 +89,28 @@ const AdminPanel = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const fetchCountsRef = useRef(() => {
+    fetchPendingPhotoCount();
+    fetchPendingPaymentCount();
+    fetchPendingChatCount();
+  });
+
   useEffect(() => {
     if (!isAdmin) return;
 
-    const fetchCounts = () => {
-      fetchPendingPhotoCount();
-      fetchPendingPaymentCount();
-      fetchPendingChatCount();
-    };
+    fetchCountsRef.current();
 
-    fetchCounts();
-
-    let adminUpdateHandler = null;
+    let handler = null;
     if (onAdminUpdate) {
-      adminUpdateHandler = (data) => {
+      handler = (data) => {
         console.log('[AdminPanel] Admin update received:', data);
-        fetchCounts();
+        fetchCountsRef.current();
         toast.success(`New update: ${data.updateType || 'Data changed'}`);
       };
-      onAdminUpdate(adminUpdateHandler);
+      onAdminUpdate(handler);
     }
 
     return () => {};
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
   if (!isAdmin) {
