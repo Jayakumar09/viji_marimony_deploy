@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
-export default function usePageRefresh(onEnter) {
+export function usePageRefresh(onEnter) {
   const location = useLocation();
 
   useEffect(() => {
@@ -10,3 +10,5 @@ export default function usePageRefresh(onEnter) {
     }
   }, [location.pathname, onEnter]);
 }
+
+export default usePageRefresh;
