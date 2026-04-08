@@ -3,16 +3,16 @@ const prisma = new PrismaClient();
 const os = require('os');
 
 const ALERT_THRESHOLDS = {
-  WARNING: 70,
-  ERROR: 85,
-  CRITICAL: 90
+  WARNING: 85,
+  ERROR: 92,
+  CRITICAL: 95
 };
 
 const RESPONSE_TIME_THRESHOLDS = {
-  EXCELLENT: 100,
-  GOOD: 500,
-  SLOW: 1000,
-  CRITICAL: 2000
+  EXCELLENT: 200,
+  GOOD: 1000,
+  SLOW: 3000,
+  CRITICAL: 5000
 };
 
 const POSTGRES_LIMITS = {
@@ -21,6 +21,10 @@ const POSTGRES_LIMITS = {
 };
 
 const CACHE_TTL_MS = 15000;
+const STARTUP_GRACE_MS = 120000;
+
+const startupTime = Date.now();
+const isStartupPhase = () => Date.now() - startupTime < STARTUP_GRACE_MS;
 const cache = {
   healthMetrics: { data: null, timestamp: 0 },
   backupMetadata: { data: null, timestamp: 0 },
@@ -176,6 +180,10 @@ const sendNotification = async (alert) => {
 };
 
 const generateFreshAlerts = async (metrics) => {
+  if (isStartupPhase()) {
+    return [];
+  }
+  
   const alerts = [];
   const now = new Date();
   
