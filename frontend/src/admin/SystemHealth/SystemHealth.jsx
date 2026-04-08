@@ -21,7 +21,7 @@ const THROTTLE_MS = 5000;
 const MIN_REFRESH_INTERVAL_MS = 10000;
 
 const formatBytes = (bytes, decimals = 2) => {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes === 0) return null;
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -30,13 +30,29 @@ const formatBytes = (bytes, decimals = 2) => {
 };
 
 const formatBytesMB = (bytes) => {
-  if (bytes === 0) return '0 MB';
+  if (!bytes || bytes === 0) return null;
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 };
 
 const formatBytesGB = (bytes) => {
-  if (bytes === 0) return '0 GB';
+  if (!bytes || bytes === 0) return null;
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+};
+
+const formatMemoryLabel = (used, total) => {
+  const usedStr = formatBytes(used);
+  const totalStr = total ? formatBytesGB(total) : null;
+  if (!usedStr) return 'Unknown';
+  if (!totalStr) return usedStr;
+  return `${usedStr} / ${totalStr}`;
+};
+
+const formatMemoryLabelMB = (used, total) => {
+  const usedStr = formatBytesMB(used);
+  const totalStr = total ? formatBytesMB(total) : null;
+  if (!usedStr) return 'Unknown';
+  if (!totalStr) return usedStr;
+  return `${usedStr} / ${totalStr}`;
 };
 
 const formatUptime = (seconds) => {
@@ -348,18 +364,6 @@ const SystemHealth = () => {
     }
   };
 
-  const getOverallStatus = () => {
-    if (!metrics) return 'unknown';
-    const { postgresql, cloudinary, googleDrive, render } = metrics;
-    if (postgresql?.status === 'unhealthy' || render?.status === 'error') return 'error';
-    if (postgresql?.storageUsagePercent > 90 || cloudinary?.storagePercent > 90 || render?.memoryUsagePercent > 90) return 'error';
-    if (postgresql?.storageUsagePercent > 70 || cloudinary?.storagePercent > 70 || render?.memoryUsagePercent > 70) return 'warning';
-    if (googleDrive?.backupOverdue) return 'warning';
-    return 'healthy';
-  };
-
-  const overallStatus = getOverallStatus();
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -369,6 +373,7 @@ const SystemHealth = () => {
   }
 
   const criticalAlerts = alerts.filter(a => a.severity === 'critical' || a.severity === 'error');
+  const hasCriticalAlerts = criticalAlerts.length > 0;
   const warningAlerts = alerts.filter(a => a.severity === 'warning');
 
   return (
@@ -435,15 +440,15 @@ const SystemHealth = () => {
         </Typography>
       )}
 
-      {overallStatus === 'error' && (
+      {hasCriticalAlerts && (
         <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} icon={<ErrorIcon />}>
-          <strong>Critical:</strong> One or more services have critical issues. Immediate action required.
+          <strong>Critical:</strong> {criticalAlerts.length} active {criticalAlerts.length === 1 ? 'alert' : 'alerts'} requiring immediate attention.
         </Alert>
       )}
 
-      {overallStatus === 'warning' && unreadCount > 0 && (
+      {!hasCriticalAlerts && warningAlerts.length > 0 && (
         <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }} icon={<Warning />}>
-          <strong>Warning:</strong> Services approaching limits or backup overdue. Review recommended.
+          <strong>Warning:</strong> {warningAlerts.length} {warningAlerts.length === 1 ? 'alert' : 'alerts'} detected. Review recommended.
         </Alert>
       )}
 
@@ -453,7 +458,7 @@ const SystemHealth = () => {
             title="PostgreSQL"
             icon={<Dns sx={{ color: '#8B5CF6', fontSize: 22 }} />}
             iconColor="#8B5CF6"
-            status={metrics?.postgresql?.status === 'unhealthy' ? 'error' : metrics?.postgresql?.storageUsagePercent > 85 ? 'error' : metrics?.postgresql?.storageUsagePercent > 70 ? 'warning' : 'healthy'}
+            status={metrics?.postgresql?.status === 'unhealthy' ? 'error' : metrics?.postgresql?.responseTimeStatus === 'CRITICAL' ? 'error' : metrics?.postgresql?.responseTimeStatus === 'SLOW' ? 'degraded' : metrics?.postgresql?.storageUsagePercent > 85 ? 'error' : metrics?.postgresql?.storageUsagePercent > 70 ? 'warning' : 'healthy'}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
               <ServiceStatusBadge status={metrics?.postgresql?.responseTimeStatus?.toLowerCase() || 'unknown'} />
@@ -463,12 +468,12 @@ const SystemHealth = () => {
             
             <UsageBar
               label="Storage"
-              sublabel={`${formatBytesGB(metrics?.postgresql?.currentSizeBytes || 0)} / ${formatBytesGB(metrics?.postgresql?.storageLimitGB * 1024 * 1024 * 1024 || 0)}`}
+              sublabel={metrics?.postgresql?.storageLimitGB ? `${formatBytesGB(metrics?.postgresql?.currentSizeBytes)} / ${formatBytesGB(metrics?.postgresql?.storageLimitGB * 1024 * 1024 * 1024)}` : 'Unknown'}
               value={metrics?.postgresql?.storageUsagePercent || 0}
             />
             <UsageBar
               label="Connections"
-              sublabel={`${metrics?.postgresql?.activeConnections || 0} / ${metrics?.postgresql?.maxConnections || 100}`}
+              sublabel={metrics?.postgresql?.maxConnections ? `${metrics?.postgresql?.activeConnections || 0} / ${metrics?.postgresql?.maxConnections}` : 'Unknown'}
               value={metrics?.postgresql?.connectionUsagePercent || 0}
             />
 
@@ -476,20 +481,20 @@ const SystemHealth = () => {
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Tables</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.postgresql?.tableCount || 0}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.postgresql?.tableCount?.toLocaleString() || 'Unknown'}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Backups (7d)</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.postgresql?.backupCount7Days || 0}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.googleDrive?.recentBackupCount ?? 0}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Last Backup</Typography>
-              {metrics?.postgresql?.backupOverdue ? (
-                <BackupOverdueBadge hours={metrics?.postgresql?.hoursSinceBackup || 0} />
+              {metrics?.googleDrive?.backupOverdue ? (
+                <BackupOverdueBadge hours={metrics?.googleDrive?.hoursSinceBackup || 0} />
               ) : (
                 <Typography variant="caption" fontWeight={600}>
-                  {metrics?.postgresql?.hoursSinceBackup 
-                    ? `${Math.floor(metrics.postgresql.hoursSinceBackup)}h ago` 
+                  {metrics?.googleDrive?.hoursSinceBackup 
+                    ? `${Math.floor(metrics.googleDrive.hoursSinceBackup)}h ago` 
                     : 'Never'}
                 </Typography>
               )}
@@ -526,12 +531,12 @@ const SystemHealth = () => {
             
             <UsageBar
               label="Storage"
-              sublabel={`${formatBytes(metrics?.cloudinary?.storageUsed || 0)} / ${formatBytesGB(metrics?.cloudinary?.storageLimit || 0)}`}
+              sublabel={metrics?.cloudinary?.storageLimit ? `${formatBytes(metrics?.cloudinary?.storageUsed)} / ${formatBytesGB(metrics?.cloudinary?.storageLimit)}` : 'Unknown'}
               value={metrics?.cloudinary?.storagePercent || 0}
             />
             <UsageBar
               label="Bandwidth"
-              sublabel={`${formatBytes(metrics?.cloudinary?.bandwidthUsed || 0)} / ${formatBytesGB(metrics?.cloudinary?.bandwidthLimit || 0)}`}
+              sublabel={metrics?.cloudinary?.bandwidthLimit ? `${formatBytes(metrics?.cloudinary?.bandwidthUsed)} / ${formatBytesGB(metrics?.cloudinary?.bandwidthLimit)}` : 'Unknown'}
               value={metrics?.cloudinary?.bandwidthPercent || 0}
             />
 
@@ -539,15 +544,15 @@ const SystemHealth = () => {
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Assets</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.assetCount?.toLocaleString() || 0}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.assetCount?.toLocaleString() || 'Unknown'}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Transformations</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.transformationCount?.toLocaleString() || 0}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.transformationCount?.toLocaleString() || 'Unknown'}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Plan</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.plan || 'unknown'}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.cloudinary?.plan || 'Unknown'}</Typography>
             </Box>
           </MetricCard>
         </Grid>
@@ -607,23 +612,23 @@ const SystemHealth = () => {
             title="Render Backend"
             icon={<Hub sx={{ color: '#673ab7', fontSize: 22 }} />}
             iconColor="#673ab7"
-            status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.memoryUsagePercent > 90 ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
+            status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.heapUsagePercent > 92 ? 'error' : metrics?.render?.heapUsagePercent > 85 ? 'warning' : metrics?.render?.memoryUsagePercent > 90 ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
               <ServiceStatusBadge status={metrics?.render?.apiHealth || 'unknown'} />
               <ConnectionIndicator connected={metrics?.render?.dbConnectionOk} />
               <Typography variant="caption" color="textSecondary">DB</Typography>
-              <ResponseTimeBadge ms={metrics?.render?.apiResponseTimeMs || 0} color={metrics?.render?.apiResponseTimeMs < 500 ? '#22c55e' : metrics?.render?.apiResponseTimeMs < 1000 ? '#eab308' : '#ef4444'} />
+              <ResponseTimeBadge ms={metrics?.render?.apiResponseTimeMs || 0} color={metrics?.render?.apiResponseTimeMs < 500 ? '#22c55e' : metrics?.render?.apiResponseTimeMs < 2000 ? '#eab308' : '#ef4444'} />
             </Box>
             
             <UsageBar
               label="Memory"
-              sublabel={`${formatBytes(metrics?.render?.memoryUsed || 0)} / ${formatBytesGB(metrics?.render?.memoryTotal || 0)}`}
+              sublabel={metrics?.render?.memoryTotal ? `${formatBytes(metrics?.render?.memoryUsed)} / ${formatBytesGB(metrics?.render?.memoryTotal)}` : 'Unknown'}
               value={metrics?.render?.memoryUsagePercent || 0}
             />
             <UsageBar
               label="Heap"
-              sublabel={`${formatBytesMB(metrics?.render?.heapUsed || 0)} / ${formatBytesMB(metrics?.render?.heapTotal || 0)}`}
+              sublabel={metrics?.render?.heapTotal ? `${formatBytesMB(metrics?.render?.heapUsed)} / ${formatBytesMB(metrics?.render?.heapTotal)}` : 'Unknown'}
               value={metrics?.render?.heapUsagePercent || 0}
             />
             <UsageBar
@@ -635,16 +640,16 @@ const SystemHealth = () => {
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Uptime</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.render?.uptimeFormatted || '0m'}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.render?.uptimeFormatted || 'Unknown'}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Environment</Typography>
-              <Typography variant="caption" fontWeight={600}>{metrics?.render?.environment || 'unknown'}</Typography>
+              <Typography variant="caption" fontWeight={600}>{metrics?.render?.environment || 'Unknown'}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption" color="textSecondary">Error Rate</Typography>
               <Typography variant="caption" fontWeight={600} sx={{ color: metrics?.render?.errorRate > 0 ? '#ef4444' : 'inherit' }}>
-                {metrics?.render?.errorRate || 0}%
+                {metrics?.render?.errorRate ?? 0}%
               </Typography>
             </Box>
           </MetricCard>
