@@ -9,11 +9,19 @@ require('dotenv').config();
 // Database connection
 const { testConnection } = require('./utils/database');
 
+// Performance monitoring and optimization
+const { createPerformanceMiddleware, getSystemHealth, memoryMonitor } = require('./services/performanceMonitor');
+const { createAdminRateLimiter, createHealthRateLimiter, createSearchRateLimiter, healthBasedThrottle } = require('./services/rateLimiter');
+const { getQueryStats, slowQueryLogs, getRecommendedIndexes, optimizeConnectionPool } = require('./services/databaseOptimizer');
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Trust proxy for rate limiter (fixes X-Forwarded-For warning)
 app.set('trust proxy', 1);
+
+// Performance monitoring middleware
+app.use(createPerformanceMiddleware());
 
 // CORS configuration - MUST be before other middleware for preflight requests
 // Support both local development and production domains
@@ -152,6 +160,47 @@ app.get('/api/debug/db-status', async (req, res) => {
   }
 });
 
+// Performance optimization endpoints
+app.get('/api/debug/performance', async (req, res) => {
+  try {
+    const health = getSystemHealth();
+    const queryStats = getQueryStats();
+    const slowLogs = slowQueryLogs().slice(0, 10);
+    const memoryStats = memoryMonitor.getStats();
+
+    res.json({
+      success: true,
+      system: health,
+      database: {
+        queryStats,
+        slowQueries: slowLogs
+      },
+      memory: memoryStats
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/debug/recommended-indexes', async (req, res) => {
+  try {
+    const indexes = getRecommendedIndexes();
+    res.json({
+      success: true,
+      count: indexes.length,
+      indexes
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profile');
@@ -215,15 +264,15 @@ app.post('/api/setup-admin', async (req, res) => {
   }
 });
 
-// Use routes
+// Use routes with rate limiting
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
-app.use('/api/search', searchRoutes);
+app.use('/api/search', createSearchRateLimiter(), searchRoutes);
 app.use('/api/message', messageRoutes);
 app.use('/api/interest', interestRoutes);
 app.use('/api/lookup', lookupRoutes);
 app.use('/api/verification', verificationRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', createAdminRateLimiter(), healthBasedThrottle, adminRoutes);
 app.use('/api/admin', adminFileServeRoutes);
 app.use('/api/admin', adminPhotosRoutes);
 app.use('/api/admin', adminVerificationRoutes);
@@ -233,7 +282,7 @@ app.use('/api/profile-pdf', profilePdfRoutes);
 app.use('/api/activity-logs', activityLogsModule.router);
 app.use('/api/shared-profile', generateSharedProfile);
 app.use('/api/admin/backup', backupRoutes);
-app.use('/api/admin/health', healthRoutes);
+app.use('/api/admin/health', createHealthRateLimiter(), healthRoutes);
 
 // ============================================
 // SSE endpoint for real-time updates
@@ -384,6 +433,14 @@ async function startServer() {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`📧 Admin contact: vijayalakshmijayakumar45@gmail.com`);
         console.log(`🏠 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+        
+        // Initialize optimization modules
+        try {
+          await optimizeConnectionPool();
+          console.log(`⚡ Performance optimization: Enabled`);
+        } catch (optError) {
+          console.log(`⚠️  Optimization: ${optError.message}`);
+        }
         
         // Initialize Backup Scheduler
         try {
