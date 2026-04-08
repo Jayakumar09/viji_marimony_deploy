@@ -612,7 +612,7 @@ const SystemHealth = () => {
             title="Render Backend"
             icon={<Hub sx={{ color: '#673ab7', fontSize: 22 }} />}
             iconColor="#673ab7"
-            status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.heapUsagePercent > 92 ? 'error' : metrics?.render?.heapUsagePercent > 85 ? 'warning' : metrics?.render?.memoryUsagePercent > 90 ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
+            status={metrics?.render?.status === 'error' ? 'error' : metrics?.render?.heapUsagePercent > 90 ? 'error' : metrics?.render?.heapUsagePercent > 80 ? 'degraded' : metrics?.render?.memoryUsagePercent > 90 ? 'error' : metrics?.render?.memoryUsagePercent > 70 ? 'warning' : 'healthy'}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
               <ServiceStatusBadge status={metrics?.render?.apiHealth || 'unknown'} />
