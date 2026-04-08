@@ -395,13 +395,13 @@ const Dashboard = () => {
     }
   }, []);
 
-  const { loading } = usePageRefresh(fetchDashboardData, {
+  const { loading, refresh } = usePageRefresh(fetchDashboardData, {
     enabled: true,
     refreshOnMount: true,
-    refreshOnVisible: true,
-    refreshOnFocus: true,
-    minInterval: 10000,
-    throttleMs: 5000
+    refreshOnVisible: false,
+    refreshOnFocus: false,
+    minInterval: 30000,
+    throttleMs: 10000
   });
 
   const StatCard = ({ title, value, icon, color, trend, subtitle }) => (
@@ -3595,13 +3595,13 @@ const DatabaseBackup = () => {
     }
   }, []);
 
-  const { loading } = usePageRefresh(fetchBackupData, {
+  const { loading, refresh } = usePageRefresh(fetchBackupData, {
     enabled: true,
     refreshOnMount: true,
-    refreshOnVisible: true,
-    refreshOnFocus: true,
-    minInterval: 15000,
-    throttleMs: 5000
+    refreshOnVisible: false,
+    refreshOnFocus: false,
+    minInterval: 30000,
+    throttleMs: 10000
   });
 
   const handleCreateBackup = async () => {

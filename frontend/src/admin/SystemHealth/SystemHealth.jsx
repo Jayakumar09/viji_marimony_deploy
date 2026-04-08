@@ -255,10 +255,10 @@ const SystemHealth = () => {
   const { loading, refresh } = usePageRefresh(fetchAllData, {
     enabled: true,
     refreshOnMount: true,
-    refreshOnVisible: true,
-    refreshOnFocus: true,
-    minInterval: MIN_REFRESH_INTERVAL_MS,
-    throttleMs: THROTTLE_MS
+    refreshOnVisible: false,
+    refreshOnFocus: false,
+    minInterval: 30000,
+    throttleMs: 10000
   });
 
   const handleRefresh = useCallback(async () => {

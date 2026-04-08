@@ -3,7 +3,6 @@ import api from '../services/api';
 
 const RealTimeContext = createContext();
 
-// Get API base URL
 const getApiBaseUrl = () => {
   const backendUrl = process.env.REACT_APP_API_URL || 'https://viji-marimony-deploy-backend.onrender.com/api';
   return backendUrl.replace('/api', '');
@@ -23,13 +22,13 @@ export const RealTimeProvider = ({ children }) => {
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 3;
+  const reconnectDelay = useRef(10000);
+  const isAdminRef = useRef(false);
 
-  // Callback functions that will be called when events are received
   const onProfileUpdateRef = useRef(null);
   const onAdminUpdateRef = useRef(null);
 
-  // Set up callbacks
   const onProfileUpdate = useCallback((callback) => {
     onProfileUpdateRef.current = callback;
   }, []);
@@ -38,69 +37,10 @@ export const RealTimeProvider = ({ children }) => {
     onAdminUpdateRef.current = callback;
   }, []);
 
-  // Connect to SSE endpoint
-  const connect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
-    const baseUrl = getApiBaseUrl();
-    const eventSource = new EventSource(`${baseUrl}/api/sse`);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      console.log('[SSE] Connected to real-time updates');
-      setIsConnected(true);
-      reconnectAttempts.current = 0;
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('[SSE] Received event:', data);
-        setLastEvent(data);
-
-        // Handle different event types
-        if (data.type === 'profile_updated' && onProfileUpdateRef.current) {
-          onProfileUpdateRef.current(data.data);
-        }
-
-        if (data.type === 'admin_update' && onAdminUpdateRef.current) {
-          onAdminUpdateRef.current(data.data);
-        }
-
-        if (data.type === 'connected') {
-          console.log('[SSE] Connection confirmed:', data.message);
-        }
-      } catch (error) {
-        console.error('[SSE] Error parsing event data:', error);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('[SSE] Connection error:', error);
-      setIsConnected(false);
-      eventSource.close();
-
-      // Attempt to reconnect
-      if (reconnectAttempts.current < maxReconnectAttempts) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-        console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
-        
-        reconnectTimeoutRef.current = setTimeout(() => {
-          reconnectAttempts.current++;
-          connect();
-        }, delay);
-      } else {
-        console.error('[SSE] Max reconnection attempts reached');
-      }
-    };
-  }, []);
-
-  // Disconnect from SSE
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
     
     if (eventSourceRef.current) {
@@ -109,12 +49,64 @@ export const RealTimeProvider = ({ children }) => {
     }
     
     setIsConnected(false);
-    console.log('[SSE] Disconnected');
+    reconnectAttempts.current = 0;
   }, []);
 
-  // Connect on mount, disconnect on unmount
+  const connect = useCallback(() => {
+    if (!isAdminRef.current) return;
+    if (eventSourceRef.current) return;
+
+    const baseUrl = getApiBaseUrl();
+    const eventSource = new EventSource(`${baseUrl}/api/sse`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      console.log('[SSE] Connected');
+      setIsConnected(true);
+      reconnectAttempts.current = 0;
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setLastEvent(data);
+
+        if (data.type === 'profile_updated' && onProfileUpdateRef.current) {
+          onProfileUpdateRef.current(data.data);
+        }
+
+        if (data.type === 'admin_update' && onAdminUpdateRef.current) {
+          onAdminUpdateRef.current(data.data);
+        }
+      } catch (error) {
+        console.error('[SSE] Parse error:', error);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      eventSourceRef.current = null;
+      setIsConnected(false);
+
+      if (reconnectAttempts.current < maxReconnectAttempts && isAdminRef.current) {
+        console.log(`[SSE] Reconnecting in ${reconnectDelay.current}ms...`);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectAttempts.current++;
+          connect();
+        }, reconnectDelay.current);
+      } else {
+        console.log('[SSE] Connection stopped');
+      }
+    };
+  }, []);
+
   useEffect(() => {
-    connect();
+    const adminToken = localStorage.getItem('adminToken');
+    isAdminRef.current = !!adminToken;
+
+    if (isAdminRef.current) {
+      connect();
+    }
 
     return () => {
       disconnect();

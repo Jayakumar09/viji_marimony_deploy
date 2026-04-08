@@ -1,116 +1,93 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-const MIN_REFRESH_INTERVAL_MS = 5000;
-const THROTTLE_MS = 3000;
+const MIN_INTERVAL = 10000;
+const THROTTLE = 5000;
 
 export const usePageRefresh = (fetchFn, options = {}) => {
   const {
     enabled = true,
     refreshOnMount = true,
-    refreshOnVisible = true,
-    refreshOnFocus = true,
-    minInterval = MIN_REFRESH_INTERVAL_MS,
-    throttleMs = THROTTLE_MS,
-    dependencies = []
+    refreshOnVisible = false,
+    refreshOnFocus = false,
+    minInterval = MIN_INTERVAL,
+    throttleMs = THROTTLE
   } = options;
 
-  const [loading, setLoading] = useState(refreshOnMount);
-  const [lastRefresh, setLastRefresh] = useState(null);
-  
+  const [loading, setLoading] = useState(false);
+  const fetchDataRef = useRef(fetchFn);
+  const lastFetchRef = useRef(0);
+  const isMountedRef = useRef(true);
   const isFetchingRef = useRef(false);
-  const lastFetchTimeRef = useRef(0);
-  const isPageVisibleRef = useRef(true);
-  const mountedRef = useRef(true);
 
-  const fetchData = useCallback(async (isManualRefresh = false) => {
-    if (!enabled || !mountedRef.current) return;
-    
+  useEffect(() => {
+    fetchDataRef.current = fetchFn;
+  }, [fetchFn]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const executeFetch = useCallback(async (isManual = false) => {
+    if (!enabled || !isMountedRef.current || isFetchingRef.current) return;
+
     const now = Date.now();
+    const minWait = isManual ? throttleMs : Math.max(throttleMs, minInterval);
     
-    if (isFetchingRef.current) return;
-    
-    if (!isManualRefresh && now - lastFetchTimeRef.current < throttleMs) return;
-    
-    if (!isPageVisibleRef.current && !isManualRefresh) return;
-    
-    if (!isManualRefresh && now - lastFetchTimeRef.current < minInterval) return;
+    if (!isManual && now - lastFetchRef.current < minWait) return;
 
     isFetchingRef.current = true;
-    
+    setLoading(true);
+
     try {
-      await fetchFn();
-      if (mountedRef.current) {
-        lastFetchTimeRef.current = now;
-        setLastRefresh(new Date());
-        setLoading(false);
+      await fetchDataRef.current();
+      if (isMountedRef.current) {
+        lastFetchRef.current = Date.now();
       }
     } catch (error) {
-      if (mountedRef.current) {
+      console.error('Fetch error:', error);
+    } finally {
+      if (isMountedRef.current) {
         setLoading(false);
       }
-    } finally {
       isFetchingRef.current = false;
     }
-  }, [fetchFn, enabled, minInterval, throttleMs, ...dependencies]);
+  }, [enabled, minInterval, throttleMs]);
 
   useEffect(() => {
-    mountedRef.current = true;
-    
-    if (refreshOnMount && enabled) {
-      fetchData(true);
-    } else {
-      setLoading(false);
+    if (enabled && refreshOnMount) {
+      executeFetch(true);
     }
+  }, [enabled, refreshOnMount]);
 
-    return () => {
-      mountedRef.current = false;
+  useEffect(() => {
+    if (!enabled || !refreshOnVisible) return;
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        executeFetch(false);
+      }
     };
-  }, [refreshOnMount, enabled]);
 
-  useEffect(() => {
-    if (!enabled) return;
-
-    if (refreshOnVisible) {
-      const handleVisibilityChange = () => {
-        isPageVisibleRef.current = document.visibilityState === 'visible';
-        
-        if (document.visibilityState === 'visible') {
-          fetchData();
-        }
-      };
-      
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }
-  }, [enabled, refreshOnVisible, fetchData]);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [enabled, refreshOnVisible]);
 
   useEffect(() => {
     if (!enabled || !refreshOnFocus) return;
 
-    const handleFocus = () => {
-      fetchData();
-    };
-    
+    const handleFocus = () => executeFetch(false);
     window.addEventListener('focus', handleFocus);
-    
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [enabled, refreshOnFocus, fetchData]);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [enabled, refreshOnFocus]);
 
   const refresh = useCallback(() => {
-    fetchData(true);
-  }, [fetchData]);
+    executeFetch(true);
+  }, [executeFetch]);
 
-  return {
-    loading,
-    lastRefresh,
-    refresh,
-    isFetching: isFetchingRef.current
-  };
+  return { loading, refresh };
 };
 
 export default usePageRefresh;
