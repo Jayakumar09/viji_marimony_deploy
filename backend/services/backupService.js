@@ -24,9 +24,14 @@ const getAllBackups = async () => {
       }
     }
 
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const backupLogs = await prisma.backupLog.findMany({
-      where: { status: 'completed' },
-      orderBy: { completedAt: 'desc' }
+      where: { 
+        status: 'completed',
+        completedAt: { gte: thirtyDaysAgo }
+      },
+      orderBy: { completedAt: 'desc' },
+      take: 100
     });
 
     const allBackups = [
@@ -122,7 +127,7 @@ const getBackupSummary = async () => {
     hoursSinceBackup: hoursSinceBackup ? parseFloat(hoursSinceBackup.toFixed(1)) : null,
     backupOverdue: hoursSinceBackup !== null && hoursSinceBackup > 24,
     recentBackupCount: recentBackups.length,
-    recentBackups: recentBackups.slice(0, 5).map(b => ({
+    recentBackups: recentBackups.slice(0, 3).map(b => ({
       id: b.id,
       fileName: b.fileName || b.name,
       fileSize: b.fileSize || b.size,
@@ -130,8 +135,8 @@ const getBackupSummary = async () => {
       completedAt: b.completedAt || b.createdTime,
       location: b.location
     })),
-    scheduledBackups: scheduledBackups.slice(0, 10),
-    manualBackups: manualBackups.slice(0, 10),
+    scheduledBackups: scheduledBackups.slice(0, 5),
+    manualBackups: manualBackups.slice(0, 5),
     scheduledBackupsCount: scheduledBackups.length,
     manualBackupsCount: manualBackups.length
   };

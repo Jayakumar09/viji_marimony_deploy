@@ -20,7 +20,7 @@ const POSTGRES_LIMITS = {
   storageLimitGB: parseFloat(process.env.POSTGRES_STORAGE_GB_LIMIT) || 100,
 };
 
-const CACHE_TTL_MS = 15000;
+const CACHE_TTL_MS = 30000;
 const STARTUP_GRACE_MS = 120000;
 
 const startupTime = Date.now();
@@ -57,6 +57,92 @@ const invalidateCache = (cacheKey = null) => {
   }
 };
 
+const sanitizeMetricsForResponse = (metrics) => {
+  if (!metrics) return null;
+  
+  return {
+    postgresql: {
+      status: metrics.postgresql?.status,
+      connected: metrics.postgresql?.connected,
+      connectionHealth: metrics.postgresql?.connectionHealth,
+      connectionTimeMs: metrics.postgresql?.connectionTimeMs,
+      avgResponseTimeMs: metrics.postgresql?.avgResponseTimeMs,
+      responseTimeStatus: metrics.postgresql?.responseTimeStatus,
+      responseTimeColor: metrics.postgresql?.responseTimeColor,
+      activeConnections: metrics.postgresql?.activeConnections,
+      maxConnections: metrics.postgresql?.maxConnections,
+      connectionUsagePercent: metrics.postgresql?.connectionUsagePercent,
+      currentSizeMB: metrics.postgresql?.currentSizeMB,
+      currentSizeGB: metrics.postgresql?.currentSizeGB,
+      storageLimitGB: metrics.postgresql?.storageLimitGB,
+      storageUsagePercent: metrics.postgresql?.storageUsagePercent,
+      tableCount: metrics.postgresql?.tableCount,
+      lastBackup: metrics.postgresql?.lastBackup ? {
+        fileName: metrics.postgresql.lastBackup.fileName,
+        fileSizeFormatted: metrics.postgresql.lastBackup.fileSizeFormatted,
+        completedAt: metrics.postgresql.lastBackup.completedAt,
+        status: metrics.postgresql.lastBackup.status
+      } : null,
+      hoursSinceBackup: metrics.postgresql?.hoursSinceBackup,
+      backupOverdue: metrics.postgresql?.backupOverdue,
+      backupCount7Days: metrics.postgresql?.backupCount7Days
+    },
+    cloudinary: {
+      status: metrics.cloudinary?.status,
+      connected: metrics.cloudinary?.connected,
+      storagePercent: metrics.cloudinary?.storagePercent,
+      bandwidthPercent: metrics.cloudinary?.bandwidthPercent,
+      assetCount: metrics.cloudinary?.assetCount
+    },
+    googleDrive: {
+      status: metrics.googleDrive?.status,
+      connected: metrics.googleDrive?.connected,
+      googleDriveConfigured: metrics.googleDrive?.googleDriveConfigured,
+      totalBackups: metrics.googleDrive?.totalBackups,
+      lastBackup: metrics.googleDrive?.lastBackup ? {
+        fileName: metrics.googleDrive.lastBackup.fileName,
+        fileSizeFormatted: metrics.googleDrive.lastBackup.fileSizeFormatted,
+        completedAt: metrics.googleDrive.lastBackup.completedAt,
+        triggeredBy: metrics.googleDrive.lastBackup.triggeredBy
+      } : null,
+      hoursSinceBackup: metrics.googleDrive?.hoursSinceBackup,
+      backupOverdue: metrics.googleDrive?.backupOverdue,
+      recentBackupCount: metrics.googleDrive?.recentBackupCount,
+      nextScheduledRun: metrics.googleDrive?.nextScheduledRun,
+      scheduledBackupsCount: metrics.googleDrive?.scheduledBackupsCount,
+      manualBackupsCount: metrics.googleDrive?.manualBackupsCount
+    },
+    render: {
+      status: metrics.render?.status,
+      connected: metrics.render?.connected,
+      memoryUsagePercent: metrics.render?.memoryUsagePercent,
+      memoryUsedFormatted: metrics.render?.memoryUsedFormatted,
+      memoryTotalFormatted: metrics.render?.memoryTotalFormatted,
+      heapUsagePercent: metrics.render?.heapUsagePercent,
+      cpuUsage: metrics.render?.cpuUsage,
+      cpuCores: metrics.render?.cpuCores,
+      uptimeFormatted: metrics.render?.uptimeFormatted,
+      apiHealth: metrics.render?.apiHealth,
+      apiResponseTimeMs: metrics.render?.apiResponseTimeMs,
+      dbConnectionOk: metrics.render?.dbConnectionOk,
+      environment: metrics.render?.environment,
+      platform: metrics.render?.platform
+    },
+    cron: {
+      status: metrics.cron?.status,
+      schedule: metrics.cron?.schedule,
+      lastRun: metrics.cron?.lastRun,
+      lastRunStatus: metrics.cron?.lastRunStatus,
+      lastRunDuration: metrics.cron?.lastRunDuration,
+      lastRunFileName: metrics.cron?.lastRunFileName,
+      lastRunFileSizeFormatted: metrics.cron?.lastRunFileSizeFormatted,
+      nextRun: metrics.cron?.nextRun,
+      enabled: metrics.cron?.enabled
+    },
+    timestamp: metrics.timestamp
+  };
+};
+
 const getBackupMetadata = async () => {
   const cached = getCached('backupMetadata');
   if (cached) return cached;
@@ -64,11 +150,9 @@ const getBackupMetadata = async () => {
   try {
     const backupService = require('./backupService');
     const metadata = await backupService.getBackupSummary();
-    
     setCached('backupMetadata', metadata);
     return metadata;
   } catch (error) {
-    console.error('[Health] Failed to get backup metadata:', error.message);
     return {
       googleDriveConfigured: false,
       googleDriveConnected: false,
@@ -175,7 +259,7 @@ const sendNotification = async (alert) => {
       }
     }
   } catch (error) {
-    console.error('[Health] Failed to send notification:', error.message);
+    console.error('[Notification] Failed:', error.message);
   }
 };
 
@@ -509,7 +593,7 @@ const checkPostgresHealth = async () => {
     setCached('postgresHealth', result);
     return result;
   } catch (error) {
-    console.error('[Health] PostgreSQL check failed:', error.message);
+    console.error('[DB] Health check failed:', error.message);
     return {
       status: 'unhealthy',
       connected: false,
@@ -596,7 +680,7 @@ const checkCloudinaryHealth = async () => {
       plan: result.plan?.name || 'unknown'
     };
   } catch (error) {
-    console.error('[Health] Cloudinary check failed:', error.message);
+    console.error('[Cloudinary] Health check failed:', error.message);
     return {
       status: 'error',
       connected: false,
@@ -644,7 +728,7 @@ const checkGoogleDriveHealth = async () => {
       manualBackupsCount: metadata.manualBackups.length
     };
   } catch (error) {
-    console.error('[Health] Google Drive check failed:', error.message);
+    console.error('[Drive] Health check failed:', error.message);
     return {
       status: 'error',
       connected: false,
@@ -686,7 +770,7 @@ const checkCronJobHealth = async () => {
       lastRunFileSize = lastScheduledBackup.fileSize ? Number(lastScheduledBackup.fileSize) : null;
     }
   } catch (e) {
-    console.error('[Health] Cron job health check failed:', e.message);
+    console.error('[Cron] Health check failed:', e.message);
   }
 
   let nextRun = new Date();
@@ -790,7 +874,7 @@ const checkRenderHealth = async () => {
       pid: process.pid
     };
   } catch (error) {
-    console.error('[Health] Render check failed:', error.message);
+    console.error('[Render] Health check failed:', error.message);
     return {
       status: 'error',
       connected: false,
@@ -817,7 +901,14 @@ const formatUptime = (seconds) => {
   return `${minutes}m`;
 };
 
-const getAllHealthMetrics = async () => {
+const getAllHealthMetrics = async (forceRefresh = false) => {
+  if (!forceRefresh) {
+    const cached = getCached('healthMetrics');
+    if (cached) {
+      return sanitizeMetricsForResponse(cached);
+    }
+  }
+
   const [postgres, cloudinary, googleDrive, render, cron] = await Promise.all([
     checkPostgresHealth(),
     checkCloudinaryHealth(),
@@ -837,100 +928,84 @@ const getAllHealthMetrics = async () => {
 
   setCached('healthMetrics', metrics);
   
-  const alerts = await generateFreshAlerts(metrics);
-  setCached('freshAlerts', alerts);
+  if (!isStartupPhase()) {
+    const alerts = await generateFreshAlerts(metrics);
+    setCached('freshAlerts', alerts);
+  }
 
-  return metrics;
+  return sanitizeMetricsForResponse(metrics);
 };
 
 const getRecentAlerts = async (limit = 50) => {
-  try {
-    const cachedAlerts = getCached('freshAlerts');
-    if (cachedAlerts) {
-      return cachedAlerts.slice(0, limit);
-    }
-
-    const cachedMetrics = getCached('healthMetrics');
-    if (cachedMetrics) {
-      const alerts = await generateFreshAlerts(cachedMetrics);
-      setCached('freshAlerts', alerts);
-      return alerts.slice(0, limit);
-    }
-
-    invalidateCache();
-    const metrics = await getAllHealthMetrics();
-    const alerts = await generateFreshAlerts(metrics);
-    return alerts.slice(0, limit);
-  } catch (error) {
-    console.error('[Health] Failed to get recent alerts:', error.message);
-    return [];
+  const cachedAlerts = getCached('freshAlerts');
+  if (cachedAlerts) {
+    return cachedAlerts.slice(0, limit);
   }
+
+  const cachedMetrics = getCached('healthMetrics');
+  if (cachedMetrics && !isStartupPhase()) {
+    const alerts = await generateFreshAlerts(cachedMetrics);
+    setCached('freshAlerts', alerts);
+    return alerts.slice(0, limit);
+  }
+
+  const metrics = await getAllHealthMetrics();
+  if (!isStartupPhase()) {
+    const alerts = await generateFreshAlerts(metrics);
+    setCached('freshAlerts', alerts);
+    return alerts.slice(0, limit);
+  }
+  
+  return [];
 };
 
 const getUnreadAlertCount = async () => {
-  try {
-    const alerts = await getRecentAlerts(100);
-    return alerts.filter(a => !a.isRead).length;
-  } catch (error) {
-    console.error('[Health] Failed to get unread count:', error.message);
-    return 0;
-  }
+  const alerts = await getRecentAlerts(100);
+  return alerts.filter(a => !a.isRead).length;
 };
 
 const executeBackup = async (adminId = 'manual') => {
   try {
     const backupController = require('../controllers/backupController');
-    const result = await backupController.createBackup(adminId);
+    await backupController.createBackup(adminId);
     invalidateCache();
-    return { success: true, result };
+    return { success: true };
   } catch (error) {
-    console.error('[Health] Manual backup failed:', error.message);
     return { success: false, error: error.message };
   }
 };
 
 const runServiceCheck = async () => {
   invalidateCache();
-  const metrics = await getAllHealthMetrics();
-  return metrics;
+  return getAllHealthMetrics(true);
 };
 
 const markAlertRead = async (alertId, adminId) => {
-  try {
-    const alerts = await getRecentAlerts(1000);
-    const alertIndex = alerts.findIndex(a => a.id === alertId);
-    if (alertIndex !== -1) {
-      alerts[alertIndex].isRead = true;
-      alerts[alertIndex].readAt = new Date();
-      alerts[alertIndex].readBy = adminId;
-      setCached('freshAlerts', alerts);
-    }
-    return { success: true };
-  } catch (error) {
-    console.error('[Health] Failed to mark alert read:', error.message);
-    return { success: false, error: error.message };
+  const alerts = await getRecentAlerts(1000);
+  const alertIndex = alerts.findIndex(a => a.id === alertId);
+  if (alertIndex !== -1) {
+    alerts[alertIndex].isRead = true;
+    alerts[alertIndex].readAt = new Date();
+    alerts[alertIndex].readBy = adminId;
+    setCached('freshAlerts', alerts);
   }
+  return { success: true };
 };
 
 const markAllAlertsRead = async (adminId) => {
-  try {
-    const alerts = await getRecentAlerts(1000);
-    const now = new Date();
-    for (const alert of alerts) {
-      alert.isRead = true;
-      alert.readAt = now;
-      alert.readBy = adminId;
-    }
-    setCached('freshAlerts', alerts);
-    return { success: true };
-  } catch (error) {
-    console.error('[Health] Failed to mark all alerts read:', error.message);
-    return { success: false, error: error.message };
+  const alerts = await getRecentAlerts(1000);
+  const now = new Date();
+  for (const alert of alerts) {
+    alert.isRead = true;
+    alert.readAt = now;
+    alert.readBy = adminId;
   }
+  setCached('freshAlerts', alerts);
+  return { success: true };
 };
 
-const clearOldAlerts = async (daysOld = 30) => {
-  return { success: true, deletedCount: 0, message: 'Alerts are generated dynamically' };
+const clearOldAlerts = async () => {
+  return { success: true, message: 'Alerts are generated dynamically' };
 };
 
 module.exports = {
