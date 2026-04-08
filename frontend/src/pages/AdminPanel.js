@@ -392,7 +392,10 @@ const Dashboard = () => {
   }, []);
 
   const [loading, setLoading] = useState(false);
-  usePageRefresh(() => { setLoading(true); fetchDashboardData().finally(() => setLoading(false)); });
+  useEffect(() => {
+    setLoading(true);
+    fetchDashboardData().finally(() => setLoading(false));
+  }, [fetchDashboardData]);
 
   const StatCard = ({ title, value, icon, color, trend, subtitle }) => (
     <Card sx={{
@@ -3589,7 +3592,9 @@ const DatabaseBackup = () => {
     }
   }, []);
 
-  usePageRefresh(fetchBackupData);
+  useEffect(() => {
+    fetchBackupData();
+  }, [fetchBackupData]);
 
   const handleCreateBackup = async () => {
     setCreating(true);

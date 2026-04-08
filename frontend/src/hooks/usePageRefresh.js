@@ -1,14 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
 export function usePageRefresh(onEnter) {
   const location = useLocation();
-
+  const callbackRef = useRef(onEnter);
+  
   useEffect(() => {
-    if (typeof onEnter === 'function') {
-      onEnter();
+    callbackRef.current = onEnter;
+  }, [onEnter]);
+  
+  useEffect(() => {
+    if (callbackRef.current) {
+      callbackRef.current();
     }
-  }, [location.pathname, onEnter]);
+  }, [location.pathname]);
 }
 
 export default usePageRefresh;

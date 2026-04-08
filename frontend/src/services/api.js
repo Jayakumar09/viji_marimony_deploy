@@ -11,30 +11,9 @@ const api = axios.create({
   },
 });
 
-const pendingRequests = new Map();
-
-const generateRequestKey = (config) => {
-  if (!config || !config.method || !config.url) {
-    return Math.random().toString(36);
-  }
-  return `${config.method}:${config.url}:${JSON.stringify(config.params || {})}`;
-};
-
 api.interceptors.request.use(
   (config) => {
     if (!config || !config.url) return config;
-    
-    const requestKey = generateRequestKey(config);
-    
-    if (pendingRequests.has(requestKey)) {
-      const controller = pendingRequests.get(requestKey);
-      controller.abort();
-      pendingRequests.delete(requestKey);
-    }
-    
-    const controller = axios.CancelToken.source();
-    config.cancelToken = controller.token;
-    pendingRequests.set(requestKey, controller);
 
     const adminToken = localStorage.getItem('adminToken');
     const userToken = localStorage.getItem('token');
@@ -56,20 +35,10 @@ api.interceptors.request.use(
 );
 
 api.interceptors.response.use(
-  (response) => {
-    if (response && response.config) {
-      const requestKey = generateRequestKey(response.config);
-      pendingRequests.delete(requestKey);
-    }
-    return response;
-  },
+  (response) => response,
   (error) => {
     if (axios.isCancel(error)) {
       return Promise.reject(error);
-    }
-    if (error && error.config) {
-      const requestKey = generateRequestKey(error.config);
-      pendingRequests.delete(requestKey);
     }
     return Promise.reject(error);
   }
