@@ -1,5 +1,5 @@
 const rateLimit = require('express-rate-limit');
-const { shouldThrottle, getSystemHealth } = require('./performanceMonitor');
+const { shouldThrottle, getSystemHealth, memoryMonitor } = require('./performanceMonitor');
 
 const createAdminRateLimiter = () => {
   return rateLimit({
@@ -17,7 +17,7 @@ const createAdminRateLimiter = () => {
 const createHealthRateLimiter = () => {
   return rateLimit({
     windowMs: 30 * 1000,
-    max: 10,
+    max: 20,
     message: { error: 'Too many health check requests' },
     standardHeaders: true,
     legacyHeaders: false
@@ -80,16 +80,21 @@ const debounceMiddleware = (waitMs = 1000) => {
 };
 
 const healthBasedThrottle = (req, res, next) => {
+  if (memoryMonitor.isStartupPhase()) {
+    return next();
+  }
+  
   if (shouldThrottle()) {
     const health = getSystemHealth();
     
     const delay = Math.min(
-      (health.memory.percent - 70) * 100,
-      (health.heap.percent - 70) * 100,
-      (health.cpu.current - 70) * 50
+      Math.max(0, (health.memory.percent - 80) * 50),
+      Math.max(0, (health.heap.percent - 80) * 50),
+      Math.max(0, (health.cpu.current - 80) * 20),
+      2000
     );
 
-    if (delay > 0) {
+    if (delay > 500) {
       console.warn(`[Throttle] System under load, adding ${delay}ms delay`);
       
       setTimeout(() => {
@@ -107,7 +112,7 @@ const adaptiveRateLimit = (options = {}) => {
   const {
     baseLimit = 100,
     baseWindowMs = 60 * 1000,
-    healthCheckInterval = 10000
+    healthCheckInterval = 30000
   } = options;
 
   let currentLimit = baseLimit;
@@ -116,15 +121,19 @@ const adaptiveRateLimit = (options = {}) => {
   return rateLimit({
     windowMs: baseWindowMs,
     max: (req) => {
+      if (memoryMonitor.isStartupPhase()) {
+        return baseLimit * 2;
+      }
+      
       if (Date.now() - lastHealthCheck > healthCheckInterval) {
         const health = getSystemHealth();
         lastHealthCheck = Date.now();
 
-        if (health.memory.percent > 80 || health.heap.percent > 80) {
+        if (health.memory.percent > 90 || health.heap.percent > 90) {
           currentLimit = Math.floor(baseLimit * 0.3);
-        } else if (health.memory.percent > 70 || health.heap.percent > 70) {
+        } else if (health.memory.percent > 80 || health.heap.percent > 80) {
           currentLimit = Math.floor(baseLimit * 0.5);
-        } else if (health.cpu.current > 70) {
+        } else if (health.cpu.current > 80) {
           currentLimit = Math.floor(baseLimit * 0.7);
         } else {
           currentLimit = baseLimit;
