@@ -95,7 +95,7 @@ model User {
   sentInterests     Interest[] @relation("SentInterests")
   receivedInterests Interest[] @relation("ReceivedInterests")
   sentMessages      Message[]  @relation("SentMessages")
-  receivedMessages  Message[]  @relation("ReceivedMessages")
+  receivedMessages  Message[] @relation("ReceivedMessages")
   photoVerifications PhotoVerification[] @relation("UserPhotos")
   documents         Document[] @relation("UserDocuments")
   subscriptions     Subscription[] @relation("UserSubscriptions")
@@ -105,6 +105,10 @@ model User {
   verifications     Verification[] @relation("UserVerifications")
   payments          Payments[] @relation("UserPayments")
 
+  @@index([createdAt])
+  @@index([isVerified])
+  @@index([isPremium])
+  @@index([isActive])
   @@map("users")
 }
 
@@ -247,6 +251,8 @@ model PhotoVerification {
   // Relations
   user        User     @relation("UserPhotos", fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([status])
+  @@index([createdAt])
   @@map("photo_verifications")
 }
 
@@ -280,6 +286,9 @@ model Message {
   sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
 
+  @@index([senderId, createdAt])
+  @@index([receiverId, createdAt])
+  @@index([isRead])
   @@map("messages")
 }
 
@@ -313,6 +322,9 @@ model Subscription {
   // Relations
   user        User     @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([status])
+  @@index([endDate])
   @@map("subscriptions")
 }
 

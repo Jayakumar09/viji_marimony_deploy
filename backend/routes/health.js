@@ -2,10 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { adminAuthMiddleware } = require('../middleware/auth');
 const healthService = require('../services/healthService');
+const cacheMiddleware = require('../middleware/cacheMiddleware');
+const cache = require('../utils/cache');
 
 router.use(adminAuthMiddleware);
 
-router.get('/metrics', async (req, res) => {
+router.get('/metrics', cacheMiddleware('health-metrics', 30000), async (req, res) => {
   try {
     const metrics = await healthService.getAllHealthMetrics();
     res.json(metrics);
@@ -14,7 +16,7 @@ router.get('/metrics', async (req, res) => {
   }
 });
 
-router.get('/alerts', async (req, res) => {
+router.get('/alerts', cacheMiddleware('health-alerts', 15000), async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const alerts = await healthService.getRecentAlerts(limit);
@@ -58,6 +60,7 @@ router.post('/backup-execute', async (req, res) => {
   try {
     const adminId = req.admin?.id || 'manual';
     const result = await healthService.executeBackup(adminId);
+    cache.clearByPrefix('health-');
     if (result.success) {
       res.json({ success: true });
     } else {
@@ -70,6 +73,7 @@ router.post('/backup-execute', async (req, res) => {
 
 router.post('/service-check', async (req, res) => {
   try {
+    cache.clearByPrefix('health-');
     const metrics = await healthService.getAllHealthMetrics(true);
     res.json({ success: true, metrics });
   } catch (error) {

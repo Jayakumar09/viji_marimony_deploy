@@ -14,18 +14,15 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { withCache, clearCache } = require('../middleware/cache');
+const cacheMiddleware = require('../middleware/cacheMiddleware');
+const cache = require('../utils/cache');
 
-// Serve uploaded payment proof files
 const uploadsDir = path.join(__dirname, '../uploads');
 if (fs.existsSync(uploadsDir)) {
   router.use('/uploads', express.static(uploadsDir));
 }
 
-// Import controller
 const manualPaymentController = require('../controllers/manualPaymentController');
-
-// Import middleware
 const { authMiddleware, adminAuthMiddleware } = require('../middleware/auth');
 
 // ============ PUBLIC ROUTES ============
@@ -98,7 +95,7 @@ router.get('/admin/all', adminAuthMiddleware, manualPaymentController.getAdminPa
  * GET /api/payments/admin/stats
  * Get payment statistics (Admin)
  */
-router.get('/admin/stats', adminAuthMiddleware, withCache('payments', 30000), manualPaymentController.getPaymentStats);
+router.get('/admin/stats', adminAuthMiddleware, cacheMiddleware('payment-stats', 30000), manualPaymentController.getPaymentStats);
 
 /**
  * GET /api/payments/admin/notifications

@@ -269,14 +269,7 @@ const SystemHealth = () => {
     }
   }, []);
 
-  const { loading, refresh } = usePageRefresh(fetchAllData, {
-    enabled: true,
-    refreshOnMount: true,
-    refreshOnVisible: false,
-    refreshOnFocus: false,
-    minInterval: 30000,
-    throttleMs: 10000
-  });
+  usePageRefresh(fetchAllData);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

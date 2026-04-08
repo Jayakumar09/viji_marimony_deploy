@@ -1,125 +1,91 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import api from '../services/api';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 
-const RealTimeContext = createContext();
+const RealTimeContext = createContext(null);
 
-const getApiBaseUrl = () => {
-  const backendUrl = process.env.REACT_APP_API_URL || 'https://viji-marimony-deploy-backend.onrender.com/api';
-  return backendUrl.replace('/api', '');
-};
+export const useRealTime = () => useContext(RealTimeContext);
 
-export const useRealTime = () => {
-  const context = useContext(RealTimeContext);
-  if (!context) {
-    throw new Error('useRealTime must be used within a RealTimeProvider');
-  }
-  return context;
-};
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 5000;
 
 export const RealTimeProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
+
   const eventSourceRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
-  const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 3;
-  const reconnectDelay = useRef(10000);
-  const isAdminRef = useRef(false);
+  const reconnectTimerRef = useRef(null);
+  const retryCountRef = useRef(0);
 
-  const onProfileUpdateRef = useRef(null);
-  const onAdminUpdateRef = useRef(null);
-
-  const onProfileUpdate = useCallback((callback) => {
-    onProfileUpdateRef.current = callback;
-  }, []);
-
-  const onAdminUpdate = useCallback((callback) => {
-    onAdminUpdateRef.current = callback;
-  }, []);
-
-  const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
+  const cleanupConnection = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
     }
-    
+
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
-    
+
     setIsConnected(false);
-    reconnectAttempts.current = 0;
   }, []);
 
   const connect = useCallback(() => {
-    if (!isAdminRef.current) return;
+    const adminToken = localStorage.getItem('adminToken');
+    
+    if (!adminToken) return;
     if (eventSourceRef.current) return;
 
-    const baseUrl = getApiBaseUrl();
-    const eventSource = new EventSource(`${baseUrl}/api/sse`);
-    eventSourceRef.current = eventSource;
+    const apiBase = process.env.REACT_APP_API_URL || '';
+    const cleanBase = apiBase.replace('/api', '');
+    const url = `${cleanBase}/api/sse`;
 
-    eventSource.onopen = () => {
-      console.log('[SSE] Connected');
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
+
+    es.onopen = () => {
+      retryCountRef.current = 0;
       setIsConnected(true);
-      reconnectAttempts.current = 0;
+      console.log('[SSE] Connected');
     };
 
-    eventSource.onmessage = (event) => {
+    es.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        setLastEvent(data);
-
-        if (data.type === 'profile_updated' && onProfileUpdateRef.current) {
-          onProfileUpdateRef.current(data.data);
-        }
-
-        if (data.type === 'admin_update' && onAdminUpdateRef.current) {
-          onAdminUpdateRef.current(data.data);
-        }
-      } catch (error) {
-        console.error('[SSE] Parse error:', error);
+        const parsed = JSON.parse(event.data);
+        setLastEvent(parsed);
+      } catch {
+        setLastEvent(event.data);
       }
     };
 
-    eventSource.onerror = () => {
-      eventSource.close();
-      eventSourceRef.current = null;
-      setIsConnected(false);
+    es.onerror = () => {
+      console.warn('[SSE] Connection error');
+      cleanupConnection();
 
-      if (reconnectAttempts.current < maxReconnectAttempts && isAdminRef.current) {
-        console.log(`[SSE] Reconnecting in ${reconnectDelay.current}ms...`);
-        reconnectTimeoutRef.current = setTimeout(() => {
-          reconnectAttempts.current++;
-          connect();
-        }, reconnectDelay.current);
-      } else {
-        console.log('[SSE] Connection stopped');
+      if (retryCountRef.current >= MAX_RETRIES) {
+        console.warn('[SSE] Max reconnect attempts reached');
+        return;
       }
+
+      const delay = BASE_DELAY_MS * Math.pow(2, retryCountRef.current);
+      retryCountRef.current += 1;
+
+      reconnectTimerRef.current = setTimeout(() => {
+        connect();
+      }, delay);
     };
-  }, []);
+  }, [cleanupConnection]);
 
   useEffect(() => {
-    const adminToken = localStorage.getItem('adminToken');
-    isAdminRef.current = !!adminToken;
-
-    if (isAdminRef.current) {
-      connect();
-    }
+    connect();
 
     return () => {
-      disconnect();
+      cleanupConnection();
     };
-  }, [connect, disconnect]);
+  }, [connect, cleanupConnection]);
 
   const value = {
     isConnected,
     lastEvent,
-    onProfileUpdate,
-    onAdminUpdate,
-    connect,
-    disconnect
   };
 
   return (

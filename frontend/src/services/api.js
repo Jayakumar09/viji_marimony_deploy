@@ -1,59 +1,67 @@
 import axios from 'axios';
 
-// API Base URL - Configure for production
-// For Render backend: https://viji-marimony-deploy-backend.onrender.com/api
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
   'https://viji-marimony-deploy-backend.onrender.com/api';
 
-// Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60 seconds for file uploads
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add request interceptor to include auth token
+const pendingRequests = new Map();
+
+const generateRequestKey = (config) => {
+  return `${config.method}:${config.url}:${JSON.stringify(config.params || {})}`;
+};
+
 api.interceptors.request.use(
   (config) => {
-    // Debug: Log all requests
-    console.log('[DEBUG api] Request URL:', config.url);
+    const requestKey = generateRequestKey(config);
     
-    // Check for admin token first (for admin API calls)
+    if (pendingRequests.has(requestKey)) {
+      const controller = pendingRequests.get(requestKey);
+      controller.abort();
+      pendingRequests.delete(requestKey);
+    }
+    
+    const controller = axios.CancelToken.source();
+    config.cancelToken = controller.token;
+    pendingRequests.set(requestKey, controller);
+
     const adminToken = localStorage.getItem('adminToken');
-    const adminUser = localStorage.getItem('adminUser');
     const userToken = localStorage.getItem('token');
     
-    console.log('[DEBUG api] adminToken exists:', !!adminToken);
-    console.log('[DEBUG api] URL includes /admin/:', config.url.includes('/admin/'));
+    const isAdminRoute = 
+      config.url.includes('/admin/') || 
+      config.url.includes('/payments/admin/') || 
+      config.url.includes('/chat/admin/');
     
-    // Use admin token for admin API calls (including /payments/admin/ and /chat/admin/), user token for regular calls
-    if (adminToken && (config.url.includes('/admin/') || config.url.includes('/payments/admin/') || config.url.includes('/chat/admin/'))) {
-      console.log('[DEBUG api] Setting admin token for:', config.url);
+    if (adminToken && isAdminRoute) {
       config.headers.Authorization = `Bearer ${adminToken}`;
-      // Add admin user info for chat routes
-      if (adminUser && config.url.includes('/chat/admin/')) {
-        config.headers['x-admin-user'] = adminUser;
-        config.headers['x-admin-token'] = adminToken;
-      }
     } else if (userToken) {
       config.headers.Authorization = `Bearer ${userToken}`;
     }
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Add response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const requestKey = generateRequestKey(response.config);
+    pendingRequests.delete(requestKey);
+    return response;
+  },
   (error) => {
-    // Don't auto-redirect on 401, let the component handle it
-    // This prevents redirect loops when token is invalid
-    console.error('API Error:', error.response?.status, error.response?.data);
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+    const requestKey = generateRequestKey(error.config);
+    pendingRequests.delete(requestKey);
     return Promise.reject(error);
   }
 );
