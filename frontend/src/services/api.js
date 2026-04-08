@@ -14,11 +14,16 @@ const api = axios.create({
 const pendingRequests = new Map();
 
 const generateRequestKey = (config) => {
+  if (!config || !config.method || !config.url) {
+    return Math.random().toString(36);
+  }
   return `${config.method}:${config.url}:${JSON.stringify(config.params || {})}`;
 };
 
 api.interceptors.request.use(
   (config) => {
+    if (!config || !config.url) return config;
+    
     const requestKey = generateRequestKey(config);
     
     if (pendingRequests.has(requestKey)) {
@@ -52,16 +57,20 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    const requestKey = generateRequestKey(response.config);
-    pendingRequests.delete(requestKey);
+    if (response && response.config) {
+      const requestKey = generateRequestKey(response.config);
+      pendingRequests.delete(requestKey);
+    }
     return response;
   },
   (error) => {
     if (axios.isCancel(error)) {
       return Promise.reject(error);
     }
-    const requestKey = generateRequestKey(error.config);
-    pendingRequests.delete(requestKey);
+    if (error && error.config) {
+      const requestKey = generateRequestKey(error.config);
+      pendingRequests.delete(requestKey);
+    }
     return Promise.reject(error);
   }
 );
