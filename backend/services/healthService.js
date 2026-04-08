@@ -20,6 +20,65 @@ const POSTGRES_LIMITS = {
   storageLimitGB: parseFloat(process.env.POSTGRES_STORAGE_GB_LIMIT) || 100,
 };
 
+const CACHE_TTL_MS = 15000;
+const cache = {
+  healthMetrics: { data: null, timestamp: 0 },
+  backupMetadata: { data: null, timestamp: 0 },
+  postgresHealth: { data: null, timestamp: 0 }
+};
+
+const isCacheValid = (cacheKey) => {
+  return cache[cacheKey].data && (Date.now() - cache[cacheKey].timestamp) < CACHE_TTL_MS;
+};
+
+const getCached = (cacheKey) => {
+  if (isCacheValid(cacheKey)) {
+    return cache[cacheKey].data;
+  }
+  return null;
+};
+
+const setCached = (cacheKey, data) => {
+  cache[cacheKey] = { data, timestamp: Date.now() };
+};
+
+const invalidateCache = (cacheKey = null) => {
+  if (cacheKey) {
+    cache[cacheKey] = { data: null, timestamp: 0 };
+  } else {
+    Object.keys(cache).forEach(key => {
+      cache[key] = { data: null, timestamp: 0 };
+    });
+  }
+};
+
+const getBackupMetadata = async () => {
+  const cached = getCached('backupMetadata');
+  if (cached) return cached;
+
+  try {
+    const backupService = require('./backupService');
+    const metadata = await backupService.getBackupSummary();
+    
+    setCached('backupMetadata', metadata);
+    return metadata;
+  } catch (error) {
+    console.error('[Health] Failed to get backup metadata:', error.message);
+    return {
+      googleDriveConfigured: false,
+      googleDriveConnected: false,
+      totalBackups: 0,
+      lastBackup: null,
+      hoursSinceBackup: null,
+      backupOverdue: false,
+      recentBackupCount: 0,
+      recentBackups: [],
+      scheduledBackups: [],
+      manualBackups: []
+    };
+  }
+};
+
 const formatBytes = (bytes, decimals = 2) => {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -251,6 +310,9 @@ const checkMemoryCriticalAlert = async (memoryPercent) => {
 };
 
 const checkPostgresHealth = async () => {
+  const cached = getCached('postgresHealth');
+  if (cached) return cached;
+
   const responseTimes = [];
   let connection = null;
   
@@ -291,26 +353,20 @@ const checkPostgresHealth = async () => {
       : connectionTime;
     const responseTimeStatus = getResponseTimeStatus(avgResponseTime);
 
-    const lastBackup = await prisma.backupLog.findFirst({
-      where: { status: 'completed' },
-      orderBy: { completedAt: 'desc' }
-    });
-
-    const recentBackups = await prisma.backupLog.findMany({
-      where: { 
-        status: 'completed',
-        completedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-      },
-      orderBy: { completedAt: 'desc' }
-    });
+    const metadata = await getBackupMetadata();
+    const lastBackup = metadata.lastBackup;
+    const hoursSinceBackup = metadata.hoursSinceBackup;
 
     let growthTrend = null;
-    if (recentBackups.length >= 2) {
-      const oldestWithSize = recentBackups[recentBackups.length - 1];
-      const latestWithSize = recentBackups[0];
+    if (metadata.recentBackups && metadata.recentBackups.length >= 2) {
+      const backups = metadata.recentBackups;
+      const oldestWithSize = backups[backups.length - 1];
+      const latestWithSize = backups[0];
       if (oldestWithSize?.fileSize && latestWithSize?.fileSize) {
         const sizeDiff = Number(latestWithSize.fileSize) - Number(oldestWithSize.fileSize);
-        const daysDiff = (new Date(latestWithSize.completedAt) - new Date(oldestWithSize.completedAt)) / (1000 * 60 * 60 * 24);
+        const oldestDate = new Date(oldestWithSize.completedAt);
+        const latestDate = new Date(latestWithSize.completedAt);
+        const daysDiff = (latestDate - oldestDate) / (1000 * 60 * 60 * 24);
         const dailyGrowth = daysDiff > 0 ? sizeDiff / daysDiff : 0;
         growthTrend = {
           dailyGrowthBytes: dailyGrowth,
@@ -321,10 +377,6 @@ const checkPostgresHealth = async () => {
         };
       }
     }
-
-    const hoursSinceBackup = lastBackup 
-      ? (Date.now() - new Date(lastBackup.completedAt).getTime()) / (1000 * 60 * 60)
-      : null;
 
     const severity = getUsageSeverity(dbUsagePercent);
     if (dbUsagePercent >= ALERT_THRESHOLDS.WARNING) {
@@ -337,7 +389,7 @@ const checkPostgresHealth = async () => {
       await checkResponseTimeAlert('postgresql', avgResponseTime);
     }
 
-    return {
+    const result = {
       status: 'healthy',
       connected: true,
       connectionHealth: responseTimeStatus.status,
@@ -354,19 +406,15 @@ const checkPostgresHealth = async () => {
       storageLimitGB: POSTGRES_LIMITS.storageLimitGB,
       storageUsagePercent: parseFloat(dbUsagePercent.toFixed(2)),
       tableCount,
-      lastBackup: lastBackup ? {
-        fileName: lastBackup.fileName,
-        fileSize: lastBackup.fileSize ? Number(lastBackup.fileSize) : null,
-        fileSizeFormatted: lastBackup.fileSize ? formatBytesMB(Number(lastBackup.fileSize)) : null,
-        completedAt: lastBackup.completedAt,
-        status: lastBackup.status,
-        triggeredBy: lastBackup.triggeredBy
-      } : null,
-      hoursSinceBackup: hoursSinceBackup ? parseFloat(hoursSinceBackup.toFixed(1)) : null,
+      lastBackup,
+      hoursSinceBackup,
       backupOverdue: hoursSinceBackup !== null && hoursSinceBackup > 24,
       growthTrend,
-      backupCount7Days: recentBackups.length
+      backupCount7Days: metadata.recentBackupCount
     };
+
+    setCached('postgresHealth', result);
+    return result;
   } catch (error) {
     console.error('[Health] PostgreSQL check failed:', error.message);
     return {
@@ -482,82 +530,8 @@ const checkCloudinaryHealth = async () => {
 
 const checkGoogleDriveHealth = async () => {
   try {
-    let googleDriveConnected = false;
-    let driveBackups = [];
-    let lastBackup = null;
-    let recentBackups = [];
-    let totalBackups = 0;
-    let hoursSinceBackup = null;
-    let backupOverdue = false;
-
-    try {
-      const googleDriveService = require('./googleDriveService');
-      googleDriveConnected = googleDriveService.isInitialized;
-      
-      if (googleDriveConnected) {
-        const files = await googleDriveService.listFiles();
-        driveBackups = files;
-        totalBackups = files.length;
-        
-        if (files.length > 0) {
-          lastBackup = {
-            fileName: files[0].name,
-            fileSize: files[0].size,
-            fileSizeFormatted: formatBytes(files[0].size),
-            completedAt: files[0].createdTime,
-            googleDriveId: files[0].id,
-            location: 'google_drive'
-          };
-          hoursSinceBackup = (Date.now() - new Date(files[0].createdTime).getTime()) / (1000 * 60 * 60);
-        }
-
-        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        recentBackups = files.filter(f => new Date(f.createdTime) >= oneWeekAgo);
-      }
-    } catch (gdError) {
-      console.log('[Health] Google Drive service not available, checking BackupLog');
-    }
-
-    const backupLogs = await prisma.backupLog.findMany({
-      where: { status: 'completed' },
-      orderBy: { completedAt: 'desc' }
-    });
-
-    const lastBackupLog = backupLogs[0];
+    const metadata = await getBackupMetadata();
     
-    if (lastBackupLog) {
-      const logBackupTime = new Date(lastBackupLog.completedAt).getTime();
-      
-      if (!lastBackup) {
-        lastBackup = {
-          fileName: lastBackupLog.fileName,
-          fileSize: lastBackupLog.fileSize ? Number(lastBackupLog.fileSize) : null,
-          fileSizeFormatted: lastBackupLog.fileSize ? formatBytesMB(Number(lastBackupLog.fileSize)) : null,
-          completedAt: lastBackupLog.completedAt,
-          triggeredBy: lastBackupLog.triggeredBy,
-          location: lastBackupLog.googleDriveId ? 'google_drive' : 'local'
-        };
-        hoursSinceBackup = (Date.now() - logBackupTime) / (1000 * 60 * 60);
-      } else {
-        const driveBackupTime = new Date(lastBackup.completedAt).getTime();
-        if (logBackupTime > driveBackupTime) {
-          lastBackup = {
-            fileName: lastBackupLog.fileName,
-            fileSize: lastBackupLog.fileSize ? Number(lastBackupLog.fileSize) : null,
-            fileSizeFormatted: lastBackupLog.fileSize ? formatBytesMB(Number(lastBackupLog.fileSize)) : null,
-            completedAt: lastBackupLog.completedAt,
-            triggeredBy: lastBackupLog.triggeredBy,
-            location: lastBackupLog.googleDriveId ? 'google_drive' : 'local'
-          };
-          hoursSinceBackup = (Date.now() - logBackupTime) / (1000 * 60 * 60);
-        }
-      }
-    }
-
-    if (hoursSinceBackup !== null) {
-      backupOverdue = hoursSinceBackup > 24;
-    }
-
     await checkBackupAlerts();
 
     let nextScheduledRun = null;
@@ -570,20 +544,20 @@ const checkGoogleDriveHealth = async () => {
       nextScheduledRun.setDate(nextScheduledRun.getDate() + 1);
     }
 
-    const successfulBackupsInLog = backupLogs.filter(b => b.status === 'completed').length;
-
     return {
-      status: totalBackups > 0 || successfulBackupsInLog > 0 ? 'healthy' : 'no_backups',
-      connected: googleDriveConnected,
-      googleDriveConfigured: googleDriveConnected,
-      totalBackups: googleDriveConnected ? totalBackups : successfulBackupsInLog,
-      lastBackup,
-      hoursSinceBackup: hoursSinceBackup ? parseFloat(hoursSinceBackup.toFixed(1)) : null,
-      backupOverdue,
+      status: metadata.totalBackups > 0 ? 'healthy' : 'no_backups',
+      connected: metadata.googleDriveConnected,
+      googleDriveConfigured: metadata.googleDriveConfigured,
+      totalBackups: metadata.totalBackups,
+      lastBackup: metadata.lastBackup,
+      hoursSinceBackup: metadata.hoursSinceBackup,
+      backupOverdue: metadata.backupOverdue,
       nextScheduledRun: nextScheduledRun.toISOString(),
-      recentBackupCount: recentBackups.length,
+      recentBackupCount: metadata.recentBackupCount,
       retentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS) || 30,
-      backupLogsCount: successfulBackupsInLog
+      recentBackups: metadata.recentBackups,
+      scheduledBackupsCount: metadata.scheduledBackups.length,
+      manualBackupsCount: metadata.manualBackups.length
     };
   } catch (error) {
     console.error('[Health] Google Drive check failed:', error.message);
@@ -612,19 +586,24 @@ const checkCronJobHealth = async () => {
   let lastRun = null;
   let lastRunStatus = null;
   let lastRunDuration = null;
+  let lastRunFileName = null;
+  let lastRunFileSize = null;
   
   try {
-    const lastBackupJob = await prisma.backupLog.findFirst({
-      where: { triggeredBy: 'scheduled' },
-      orderBy: { completedAt: 'desc' }
-    });
+    const metadata = await getBackupMetadata();
     
-    if (lastBackupJob) {
-      lastRun = lastBackupJob.completedAt;
-      lastRunStatus = lastBackupJob.status === 'completed' ? 'success' : 'failed';
-      lastRunDuration = lastBackupJob.duration;
+    const scheduledBackups = metadata.scheduledBackups;
+    if (scheduledBackups && scheduledBackups.length > 0) {
+      const lastScheduledBackup = scheduledBackups[0];
+      lastRun = lastScheduledBackup.completedAt;
+      lastRunStatus = lastScheduledBackup.status === 'completed' ? 'success' : 'failed';
+      lastRunDuration = lastScheduledBackup.duration;
+      lastRunFileName = lastScheduledBackup.fileName;
+      lastRunFileSize = lastScheduledBackup.fileSize ? Number(lastScheduledBackup.fileSize) : null;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('[Health] Cron job health check failed:', e.message);
+  }
 
   let nextRun = new Date();
   nextRun.setHours(parseInt(hour), parseInt(minute), 0, 0);
@@ -641,6 +620,9 @@ const checkCronJobHealth = async () => {
     lastRun,
     lastRunStatus,
     lastRunDuration,
+    lastRunFileName,
+    lastRunFileSize,
+    lastRunFileSizeFormatted: lastRunFileSize ? formatBytesMB(lastRunFileSize) : null,
     nextRun: nextRun.toISOString(),
     enabled: isProduction || isRender,
     environment: isProduction ? 'production' : 'development'
@@ -671,16 +653,23 @@ const checkRenderHealth = async () => {
     let responseTimeMs = 0;
 
     try {
-      const startTime = Date.now();
-      await prisma.$connect();
-      await prisma.$queryRaw`SELECT 1`;
-      await prisma.$disconnect();
-      dbConnectionOk = true;
-      responseTimeMs = Date.now() - startTime;
-      apiHealth = responseTimeMs < RESPONSE_TIME_THRESHOLDS.EXCELLENT ? 'healthy' 
-                : responseTimeMs < RESPONSE_TIME_THRESHOLDS.GOOD ? 'healthy'
-                : responseTimeMs < RESPONSE_TIME_THRESHOLDS.SLOW ? 'degraded' 
-                : 'unhealthy';
+      const postgresCached = getCached('postgresHealth');
+      if (postgresCached) {
+        responseTimeMs = postgresCached.connectionTimeMs || 0;
+        dbConnectionOk = postgresCached.connected;
+        apiHealth = postgresCached.connectionHealth || 'healthy';
+      } else {
+        const startTime = Date.now();
+        await prisma.$connect();
+        await prisma.$queryRaw`SELECT 1`;
+        await prisma.$disconnect();
+        dbConnectionOk = true;
+        responseTimeMs = Date.now() - startTime;
+        apiHealth = responseTimeMs < RESPONSE_TIME_THRESHOLDS.EXCELLENT ? 'healthy' 
+                  : responseTimeMs < RESPONSE_TIME_THRESHOLDS.GOOD ? 'healthy'
+                  : responseTimeMs < RESPONSE_TIME_THRESHOLDS.SLOW ? 'degraded' 
+                  : 'unhealthy';
+      }
     } catch (e) {
       apiHealth = 'unhealthy';
       errorRate = 100;
@@ -855,6 +844,9 @@ const executeBackup = async (adminId = 'manual') => {
   try {
     const backupController = require('../controllers/backupController');
     const result = await backupController.createBackup(adminId);
+    invalidateCache('backupMetadata');
+    invalidateCache('postgresHealth');
+    invalidateCache('healthMetrics');
     return { success: true, result };
   } catch (error) {
     console.error('[Health] Manual backup failed:', error.message);
@@ -863,6 +855,7 @@ const executeBackup = async (adminId = 'manual') => {
 };
 
 const runServiceCheck = async () => {
+  invalidateCache();
   await checkBackupAlerts();
   const metrics = await getAllHealthMetrics();
   return metrics;
@@ -882,9 +875,12 @@ module.exports = {
   getUnreadAlertCount,
   executeBackup,
   runServiceCheck,
+  getBackupMetadata,
+  invalidateCache,
   getUsageSeverity,
   formatUptime,
   formatBytes,
+  formatBytesMB,
   ALERT_THRESHOLDS,
   RESPONSE_TIME_THRESHOLDS
 };

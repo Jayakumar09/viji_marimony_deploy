@@ -5,6 +5,7 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 const { prisma } = require('../utils/database');
 const googleDriveService = require('../services/googleDriveService');
+const backupService = require('../services/backupService');
 const { logSystemActivity } = require('../modules/ActivityLogs/ActivityLogs');
 
 const BACKUP_FOLDER = process.env.BACKUP_LOCAL_PATH || path.join(__dirname, '../../backups');
@@ -104,29 +105,17 @@ const deleteLocalFile = (filePath) => {
 
 const getBackupStatus = async () => {
   try {
-    const backups = await googleDriveService.listFiles();
+    const summary = await backupService.getBackupSummary();
+    
     const localBackups = USE_LOCAL_BACKUP ? fs.readdirSync(BACKUP_FOLDER).filter(f => f.endsWith('.sql')) : [];
     
-    let lastBackup = null;
-    if (backups.length > 0) {
-      lastBackup = backups[0];
-    } else if (localBackups.length > 0) {
-      const latestLocal = localBackups.sort().reverse()[0];
-      const stats = fs.statSync(path.join(BACKUP_FOLDER, latestLocal));
-      lastBackup = {
-        name: latestLocal,
-        createdTime: stats.mtime.toISOString(),
-        size: stats.size,
-        location: 'local'
-      };
-    }
-
     return {
-      googleDriveConfigured: USE_GOOGLE_DRIVE && googleDriveService.isInitialized,
+      googleDriveConfigured: summary.googleDriveConfigured,
+      googleDriveConnected: summary.googleDriveConnected,
       localBackupConfigured: USE_LOCAL_BACKUP,
-      lastBackup,
+      lastBackup: summary.lastBackup,
       retentionDays: RETENTION_DAYS,
-      totalBackups: backups.length,
+      totalBackups: summary.totalBackups,
       totalLocalBackups: localBackups.length
     };
   } catch (error) {
@@ -145,7 +134,7 @@ const getBackupStatus = async () => {
 
 const listBackups = async () => {
   try {
-    const backups = await googleDriveService.listFiles();
+    const { backups } = await backupService.getAllBackups();
     
     const localBackups = USE_LOCAL_BACKUP ? fs.readdirSync(BACKUP_FOLDER).filter(f => f.endsWith('.sql')).map(f => {
       const stats = fs.statSync(path.join(BACKUP_FOLDER, f));
@@ -158,8 +147,8 @@ const listBackups = async () => {
       };
     }) : [];
 
-    return [...backups.map(b => ({ ...b, location: 'google_drive' })), ...localBackups]
-      .sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+    return [...backups, ...localBackups]
+      .sort((a, b) => new Date(b.completedAt || b.createdTime) - new Date(a.completedAt || a.createdTime));
   } catch (error) {
     console.error('[Backup] Failed to list backups:', error.message);
     return [];
@@ -187,13 +176,13 @@ const deleteBackup = async (backupId) => {
 
 const enforceRetentionPolicy = async () => {
   try {
-    const backups = await listBackups();
+    const { backups } = await backupService.getAllBackups();
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
 
     let deletedCount = 0;
     for (const backup of backups) {
-      const backupDate = new Date(backup.createdTime);
+      const backupDate = new Date(backup.completedAt || backup.createdTime);
       if (backupDate < cutoffDate) {
         await deleteBackup(backup.id);
         deletedCount++;
@@ -304,11 +293,11 @@ const downloadBackup = async (backupId) => {
   }
 
   const content = await googleDriveService.downloadFile(backupId);
-  const backups = await googleDriveService.listFiles();
+  const { backups } = await backupService.getAllBackups();
   const backup = backups.find(b => b.id === backupId);
   
   return {
-    name: backup?.name || 'backup.sql',
+    name: backup?.fileName || backup?.name || 'backup.sql',
     content,
     location: 'google_drive'
   };
