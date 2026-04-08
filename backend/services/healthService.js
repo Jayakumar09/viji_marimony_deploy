@@ -24,7 +24,8 @@ const CACHE_TTL_MS = 15000;
 const cache = {
   healthMetrics: { data: null, timestamp: 0 },
   backupMetadata: { data: null, timestamp: 0 },
-  postgresHealth: { data: null, timestamp: 0 }
+  postgresHealth: { data: null, timestamp: 0 },
+  freshAlerts: { data: null, timestamp: 0 }
 };
 
 const isCacheValid = (cacheKey) => {
@@ -174,139 +175,234 @@ const sendNotification = async (alert) => {
   }
 };
 
-const shouldCreateAlert = async (service, metricName, value, threshold, severity, customMessage = null) => {
-  try {
-    const existingAlert = await prisma.systemAlert.findFirst({
-      where: {
-        service,
-        metricName,
+const generateFreshAlerts = async (metrics) => {
+  const alerts = [];
+  const now = new Date();
+  
+  if (!metrics) return alerts;
+
+  const { postgresql, cloudinary, googleDrive, render, cron } = metrics;
+
+  if (postgresql) {
+    if (postgresql.storageUsagePercent >= ALERT_THRESHOLDS.WARNING) {
+      alerts.push({
+        id: `pg-storage-${now.getTime()}`,
+        service: 'postgresql',
+        alertType: 'usage_warning',
+        severity: getUsageSeverity(postgresql.storageUsagePercent),
+        title: 'PostgreSQL Storage Alert',
+        message: `Storage usage is at ${postgresql.storageUsagePercent.toFixed(1)}%, threshold: ${ALERT_THRESHOLDS.WARNING}%`,
+        metricName: 'storage_usage',
+        metricValue: String(postgresql.storageUsagePercent.toFixed(1)),
+        threshold: String(ALERT_THRESHOLDS.WARNING),
         isRead: false,
-        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (!existingAlert) {
-      const metricValue = typeof value === 'number' ? parseFloat(value.toFixed(1)) : value;
-      const alert = await prisma.systemAlert.create({
-        data: {
-          service,
-          alertType: 'usage_warning',
-          severity,
-          title: customMessage || `${service.toUpperCase()} ${metricName.replace(/_/g, ' ')} Alert`,
-          message: customMessage || `${metricName.replace(/_/g, ' ')} is at ${metricValue}%, threshold: ${threshold}%`,
-          metricName,
-          metricValue: String(metricValue),
-          threshold: String(threshold),
-        }
+        createdAt: now
       });
-
-      if (severity === 'critical' || severity === 'error') {
-        await sendNotification(alert);
-      }
-      
-      return alert;
     }
-  } catch (error) {
-    console.error(`[Health] Failed to create alert for ${service}:${metricName}`, error.message);
-  }
-};
 
-const checkBackupAlerts = async () => {
-  try {
-    const lastSuccessfulBackup = await prisma.backupLog.findFirst({
-      where: { status: 'completed' },
-      orderBy: { completedAt: 'desc' }
-    });
-
-    const hoursSinceBackup = lastSuccessfulBackup 
-      ? (Date.now() - new Date(lastSuccessfulBackup.completedAt).getTime()) / (1000 * 60 * 60)
-      : null;
-
-    if (!lastSuccessfulBackup) {
-      const existingAlert = await prisma.systemAlert.findFirst({
-        where: {
-          service: 'backup',
-          metricName: 'no_backup',
-          isRead: false,
-          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-        }
+    if (postgresql.connectionUsagePercent >= ALERT_THRESHOLDS.WARNING) {
+      alerts.push({
+        id: `pg-connections-${now.getTime()}`,
+        service: 'postgresql',
+        alertType: 'usage_warning',
+        severity: 'warning',
+        title: 'PostgreSQL Connections Alert',
+        message: `Connection usage is at ${postgresql.connectionUsagePercent.toFixed(1)}%, threshold: ${ALERT_THRESHOLDS.WARNING}%`,
+        metricName: 'connections',
+        metricValue: String(postgresql.connectionUsagePercent.toFixed(1)),
+        threshold: String(ALERT_THRESHOLDS.WARNING),
+        isRead: false,
+        createdAt: now
       });
-
-      if (!existingAlert) {
-        const alert = await prisma.systemAlert.create({
-          data: {
-            service: 'backup',
-            alertType: 'error',
-            severity: 'critical',
-            title: 'Backup System Failure',
-            message: 'No successful backup found in the last 24 hours. Immediate backup recommended.',
-            metricName: 'no_backup',
-            metricValue: '0',
-            threshold: '1',
-          }
-        });
-        await sendNotification(alert);
-      }
-    } else if (hoursSinceBackup > 24) {
-      const existingAlert = await prisma.systemAlert.findFirst({
-        where: {
-          service: 'backup',
-          metricName: 'backup_stale',
-          isRead: false,
-          createdAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) }
-        }
-      });
-
-      if (!existingAlert) {
-        const severity = hoursSinceBackup > 48 ? 'critical' : 'warning';
-        const alert = await prisma.systemAlert.create({
-          data: {
-            service: 'backup',
-            alertType: 'warning',
-            severity,
-            title: hoursSinceBackup > 48 ? 'Critical: Backup Overdue' : 'Backup Overdue',
-            message: `No successful backup in the last ${Math.floor(hoursSinceBackup)} hours. Last backup: ${lastSuccessfulBackup.fileName || 'unknown'}.`,
-            metricName: 'backup_stale',
-            metricValue: parseFloat(hoursSinceBackup.toFixed(1)),
-            threshold: '24',
-          }
-        });
-        if (severity === 'critical') {
-          await sendNotification(alert);
-        }
-      }
     }
-  } catch (error) {
-    console.error('[Health] Failed to check backup alerts:', error.message);
-  }
-};
 
-const checkResponseTimeAlert = async (service, responseTimeMs) => {
-  if (responseTimeMs >= RESPONSE_TIME_THRESHOLDS.SLOW) {
-    const severity = responseTimeMs >= RESPONSE_TIME_THRESHOLDS.CRITICAL ? 'error' : 'warning';
-    await shouldCreateAlert(
-      service,
-      'response_time',
-      responseTimeMs,
-      RESPONSE_TIME_THRESHOLDS.SLOW,
-      severity,
-      `Slow response time: ${responseTimeMs}ms (threshold: ${RESPONSE_TIME_THRESHOLDS.SLOW}ms)`
-    );
+    if (postgresql.avgResponseTimeMs >= RESPONSE_TIME_THRESHOLDS.SLOW) {
+      const severity = postgresql.avgResponseTimeMs >= RESPONSE_TIME_THRESHOLDS.CRITICAL ? 'error' : 'warning';
+      alerts.push({
+        id: `pg-response-${now.getTime()}`,
+        service: 'postgresql',
+        alertType: 'performance_warning',
+        severity,
+        title: 'PostgreSQL Response Time Alert',
+        message: `Slow response time: ${postgresql.avgResponseTimeMs}ms (threshold: ${RESPONSE_TIME_THRESHOLDS.SLOW}ms)`,
+        metricName: 'response_time',
+        metricValue: String(postgresql.avgResponseTimeMs),
+        threshold: String(RESPONSE_TIME_THRESHOLDS.SLOW),
+        isRead: false,
+        createdAt: now
+      });
+    }
   }
-};
 
-const checkMemoryCriticalAlert = async (memoryPercent) => {
-  if (memoryPercent >= ALERT_THRESHOLDS.CRITICAL) {
-    await shouldCreateAlert(
-      'render',
-      'memory_critical',
-      memoryPercent,
-      ALERT_THRESHOLDS.CRITICAL,
-      'critical',
-      `Critical memory usage: ${memoryPercent.toFixed(1)}% (threshold: ${ALERT_THRESHOLDS.CRITICAL}%)`
-    );
+  if (cloudinary && cloudinary.connected && cloudinary.status !== 'not_configured') {
+    if (cloudinary.storagePercent >= ALERT_THRESHOLDS.WARNING) {
+      alerts.push({
+        id: `cloudinary-storage-${now.getTime()}`,
+        service: 'cloudinary',
+        alertType: 'usage_warning',
+        severity: getUsageSeverity(cloudinary.storagePercent),
+        title: 'Cloudinary Storage Alert',
+        message: `Storage usage is at ${cloudinary.storagePercent.toFixed(1)}%, threshold: ${ALERT_THRESHOLDS.WARNING}%`,
+        metricName: 'storage',
+        metricValue: String(cloudinary.storagePercent.toFixed(1)),
+        threshold: String(ALERT_THRESHOLDS.WARNING),
+        isRead: false,
+        createdAt: now
+      });
+    }
+
+    if (cloudinary.bandwidthPercent >= ALERT_THRESHOLDS.WARNING) {
+      alerts.push({
+        id: `cloudinary-bandwidth-${now.getTime()}`,
+        service: 'cloudinary',
+        alertType: 'usage_warning',
+        severity: getUsageSeverity(cloudinary.bandwidthPercent),
+        title: 'Cloudinary Bandwidth Alert',
+        message: `Bandwidth usage is at ${cloudinary.bandwidthPercent.toFixed(1)}%, threshold: ${ALERT_THRESHOLDS.WARNING}%`,
+        metricName: 'bandwidth',
+        metricValue: String(cloudinary.bandwidthPercent.toFixed(1)),
+        threshold: String(ALERT_THRESHOLDS.WARNING),
+        isRead: false,
+        createdAt: now
+      });
+    }
   }
+
+  if (googleDrive) {
+    if (!googleDrive.googleDriveConfigured) {
+      alerts.push({
+        id: `drive-config-${now.getTime()}`,
+        service: 'backup',
+        alertType: 'configuration_warning',
+        severity: 'warning',
+        title: 'Google Drive Not Configured',
+        message: 'Google Drive backup is not configured. Please set up OAuth credentials.',
+        metricName: 'google_drive_config',
+        metricValue: '0',
+        threshold: '1',
+        isRead: false,
+        createdAt: now
+      });
+    } else if (googleDrive.totalBackups === 0) {
+      alerts.push({
+        id: `drive-no-backup-${now.getTime()}`,
+        service: 'backup',
+        alertType: 'error',
+        severity: 'critical',
+        title: 'Backup System Failure',
+        message: 'No backups found. Immediate backup recommended.',
+        metricName: 'no_backup',
+        metricValue: '0',
+        threshold: '1',
+        isRead: false,
+        createdAt: now
+      });
+    } else if (googleDrive.hoursSinceBackup !== null && googleDrive.hoursSinceBackup > 24) {
+      const severity = googleDrive.hoursSinceBackup > 48 ? 'critical' : 'warning';
+      alerts.push({
+        id: `drive-stale-${now.getTime()}`,
+        service: 'backup',
+        alertType: 'warning',
+        severity,
+        title: googleDrive.hoursSinceBackup > 48 ? 'Critical: Backup Overdue' : 'Backup Overdue',
+        message: `No successful backup in the last ${Math.floor(googleDrive.hoursSinceBackup)} hours.${googleDrive.lastBackup ? ` Last backup: ${googleDrive.lastBackup.fileName}` : ''}`,
+        metricName: 'backup_stale',
+        metricValue: String(googleDrive.hoursSinceBackup.toFixed(1)),
+        threshold: '24',
+        isRead: false,
+        createdAt: now
+      });
+    }
+  }
+
+  if (render) {
+    if (render.memoryUsagePercent >= ALERT_THRESHOLDS.CRITICAL) {
+      alerts.push({
+        id: `render-memory-crit-${now.getTime()}`,
+        service: 'render',
+        alertType: 'usage_warning',
+        severity: 'critical',
+        title: 'Critical Memory Usage',
+        message: `Critical memory usage: ${render.memoryUsagePercent.toFixed(1)}% (threshold: ${ALERT_THRESHOLDS.CRITICAL}%)`,
+        metricName: 'memory_critical',
+        metricValue: String(render.memoryUsagePercent.toFixed(1)),
+        threshold: String(ALERT_THRESHOLDS.CRITICAL),
+        isRead: false,
+        createdAt: now
+      });
+    } else if (render.memoryUsagePercent >= ALERT_THRESHOLDS.WARNING) {
+      alerts.push({
+        id: `render-memory-${now.getTime()}`,
+        service: 'render',
+        alertType: 'usage_warning',
+        severity: 'warning',
+        title: 'Memory Usage Alert',
+        message: `Memory usage is at ${render.memoryUsagePercent.toFixed(1)}%, threshold: ${ALERT_THRESHOLDS.WARNING}%`,
+        metricName: 'memory',
+        metricValue: String(render.memoryUsagePercent.toFixed(1)),
+        threshold: String(ALERT_THRESHOLDS.WARNING),
+        isRead: false,
+        createdAt: now
+      });
+    }
+
+    if (render.cpuUsage >= ALERT_THRESHOLDS.WARNING) {
+      alerts.push({
+        id: `render-cpu-${now.getTime()}`,
+        service: 'render',
+        alertType: 'usage_warning',
+        severity: getUsageSeverity(render.cpuUsage),
+        title: 'CPU Usage Alert',
+        message: `CPU usage is at ${render.cpuUsage.toFixed(1)}%, threshold: ${ALERT_THRESHOLDS.WARNING}%`,
+        metricName: 'cpu',
+        metricValue: String(render.cpuUsage.toFixed(1)),
+        threshold: String(ALERT_THRESHOLDS.WARNING),
+        isRead: false,
+        createdAt: now
+      });
+    }
+
+    if (render.apiResponseTimeMs >= RESPONSE_TIME_THRESHOLDS.SLOW) {
+      const severity = render.apiResponseTimeMs >= RESPONSE_TIME_THRESHOLDS.CRITICAL ? 'error' : 'warning';
+      alerts.push({
+        id: `render-api-response-${now.getTime()}`,
+        service: 'render',
+        alertType: 'performance_warning',
+        severity,
+        title: 'API Response Time Alert',
+        message: `Slow API response time: ${render.apiResponseTimeMs}ms (threshold: ${RESPONSE_TIME_THRESHOLDS.SLOW}ms)`,
+        metricName: 'response_time',
+        metricValue: String(render.apiResponseTimeMs),
+        threshold: String(RESPONSE_TIME_THRESHOLDS.SLOW),
+        isRead: false,
+        createdAt: now
+      });
+    }
+
+    if (render.dbConnectionOk === false) {
+      alerts.push({
+        id: `render-db-conn-${now.getTime()}`,
+        service: 'render',
+        alertType: 'error',
+        severity: 'critical',
+        title: 'Database Connection Failed',
+        message: 'Unable to connect to PostgreSQL database.',
+        metricName: 'db_connection',
+        metricValue: 'failed',
+        threshold: 'success',
+        isRead: false,
+        createdAt: now
+      });
+    }
+  }
+
+  for (const alert of alerts) {
+    if (alert.severity === 'critical' || alert.severity === 'error') {
+      await sendNotification(alert);
+    }
+  }
+
+  return alerts;
 };
 
 const checkPostgresHealth = async () => {
@@ -376,17 +472,6 @@ const checkPostgresHealth = async () => {
           direction: sizeDiff > 0 ? 'increasing' : 'decreasing'
         };
       }
-    }
-
-    const severity = getUsageSeverity(dbUsagePercent);
-    if (dbUsagePercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('postgresql', 'storage_usage', dbUsagePercent, ALERT_THRESHOLDS.WARNING, severity);
-    }
-    if (connectionUsagePercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('postgresql', 'connections', connectionUsagePercent, ALERT_THRESHOLDS.WARNING, 'warning');
-    }
-    if (avgResponseTime >= RESPONSE_TIME_THRESHOLDS.SLOW) {
-      await checkResponseTimeAlert('postgresql', avgResponseTime);
     }
 
     const result = {
@@ -485,13 +570,6 @@ const checkCloudinaryHealth = async () => {
     const assetCount = result.resources?.count || 0;
     const transformationCount = result.transformations?.count || 0;
 
-    if (storagePercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('cloudinary', 'storage', storagePercent, ALERT_THRESHOLDS.WARNING, getUsageSeverity(storagePercent));
-    }
-    if (bandwidthPercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('cloudinary', 'bandwidth', bandwidthPercent, ALERT_THRESHOLDS.WARNING, getUsageSeverity(bandwidthPercent));
-    }
-
     return {
       status: 'healthy',
       connected: true,
@@ -532,8 +610,6 @@ const checkGoogleDriveHealth = async () => {
   try {
     const metadata = await getBackupMetadata();
     
-    await checkBackupAlerts();
-
     let nextScheduledRun = null;
     const hour = process.env.BACKUP_CRON_HOUR || '2';
     const minute = process.env.BACKUP_CRON_MINUTE || '0';
@@ -678,19 +754,6 @@ const checkRenderHealth = async () => {
     const isRender = process.env.RENDER === 'true';
     const isProduction = process.env.NODE_ENV === 'production';
 
-    if (memUsagePercent >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('render', 'memory', memUsagePercent, ALERT_THRESHOLDS.WARNING, getUsageSeverity(memUsagePercent));
-    }
-    if (memUsagePercent >= ALERT_THRESHOLDS.CRITICAL) {
-      await checkMemoryCriticalAlert(memUsagePercent);
-    }
-    if (cpuUsage >= ALERT_THRESHOLDS.WARNING) {
-      await shouldCreateAlert('render', 'cpu', cpuUsage, ALERT_THRESHOLDS.WARNING, getUsageSeverity(cpuUsage));
-    }
-    if (responseTimeMs >= RESPONSE_TIME_THRESHOLDS.SLOW) {
-      await checkResponseTimeAlert('api', responseTimeMs);
-    }
-
     return {
       status: apiHealth === 'healthy' ? 'healthy' : apiHealth === 'degraded' ? 'degraded' : 'error',
       connected: true,
@@ -755,7 +818,7 @@ const getAllHealthMetrics = async () => {
     checkCronJobHealth()
   ]);
 
-  return {
+  const metrics = {
     postgresql: postgres,
     cloudinary,
     googleDrive,
@@ -763,77 +826,43 @@ const getAllHealthMetrics = async () => {
     cron,
     timestamp: new Date().toISOString()
   };
+
+  setCached('healthMetrics', metrics);
+  
+  const alerts = await generateFreshAlerts(metrics);
+  setCached('freshAlerts', alerts);
+
+  return metrics;
 };
 
 const getRecentAlerts = async (limit = 50) => {
   try {
-    const alerts = await prisma.systemAlert.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit
-    });
-    return alerts;
+    const cachedAlerts = getCached('freshAlerts');
+    if (cachedAlerts) {
+      return cachedAlerts.slice(0, limit);
+    }
+
+    const cachedMetrics = getCached('healthMetrics');
+    if (cachedMetrics) {
+      const alerts = await generateFreshAlerts(cachedMetrics);
+      setCached('freshAlerts', alerts);
+      return alerts.slice(0, limit);
+    }
+
+    invalidateCache();
+    const metrics = await getAllHealthMetrics();
+    const alerts = await generateFreshAlerts(metrics);
+    return alerts.slice(0, limit);
   } catch (error) {
     console.error('[Health] Failed to get recent alerts:', error.message);
     return [];
   }
 };
 
-const markAlertRead = async (alertId, adminId) => {
-  try {
-    await prisma.systemAlert.update({
-      where: { id: alertId },
-      data: {
-        isRead: true,
-        readAt: new Date(),
-        readBy: adminId
-      }
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('[Health] Failed to mark alert read:', error.message);
-    return { success: false, error: error.message };
-  }
-};
-
-const markAllAlertsRead = async (adminId) => {
-  try {
-    await prisma.systemAlert.updateMany({
-      where: { isRead: false },
-      data: {
-        isRead: true,
-        readAt: new Date(),
-        readBy: adminId
-      }
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('[Health] Failed to mark all alerts read:', error.message);
-    return { success: false, error: error.message };
-  }
-};
-
-const clearOldAlerts = async (daysOld = 30) => {
-  try {
-    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
-    const result = await prisma.systemAlert.deleteMany({
-      where: {
-        isRead: true,
-        createdAt: { lt: cutoffDate }
-      }
-    });
-    return { success: true, deletedCount: result.count };
-  } catch (error) {
-    console.error('[Health] Failed to clear old alerts:', error.message);
-    return { success: false, error: error.message };
-  }
-};
-
 const getUnreadAlertCount = async () => {
   try {
-    const count = await prisma.systemAlert.count({
-      where: { isRead: false }
-    });
-    return count;
+    const alerts = await getRecentAlerts(100);
+    return alerts.filter(a => !a.isRead).length;
   } catch (error) {
     console.error('[Health] Failed to get unread count:', error.message);
     return 0;
@@ -844,9 +873,7 @@ const executeBackup = async (adminId = 'manual') => {
   try {
     const backupController = require('../controllers/backupController');
     const result = await backupController.createBackup(adminId);
-    invalidateCache('backupMetadata');
-    invalidateCache('postgresHealth');
-    invalidateCache('healthMetrics');
+    invalidateCache();
     return { success: true, result };
   } catch (error) {
     console.error('[Health] Manual backup failed:', error.message);
@@ -856,9 +883,46 @@ const executeBackup = async (adminId = 'manual') => {
 
 const runServiceCheck = async () => {
   invalidateCache();
-  await checkBackupAlerts();
   const metrics = await getAllHealthMetrics();
   return metrics;
+};
+
+const markAlertRead = async (alertId, adminId) => {
+  try {
+    const alerts = await getRecentAlerts(1000);
+    const alertIndex = alerts.findIndex(a => a.id === alertId);
+    if (alertIndex !== -1) {
+      alerts[alertIndex].isRead = true;
+      alerts[alertIndex].readAt = new Date();
+      alerts[alertIndex].readBy = adminId;
+      setCached('freshAlerts', alerts);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[Health] Failed to mark alert read:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+const markAllAlertsRead = async (adminId) => {
+  try {
+    const alerts = await getRecentAlerts(1000);
+    const now = new Date();
+    for (const alert of alerts) {
+      alert.isRead = true;
+      alert.readAt = now;
+      alert.readBy = adminId;
+    }
+    setCached('freshAlerts', alerts);
+    return { success: true };
+  } catch (error) {
+    console.error('[Health] Failed to mark all alerts read:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+const clearOldAlerts = async (daysOld = 30) => {
+  return { success: true, deletedCount: 0, message: 'Alerts are generated dynamically' };
 };
 
 module.exports = {
@@ -877,6 +941,7 @@ module.exports = {
   runServiceCheck,
   getBackupMetadata,
   invalidateCache,
+  generateFreshAlerts,
   getUsageSeverity,
   formatUptime,
   formatBytes,
