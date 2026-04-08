@@ -90,32 +90,29 @@ const AdminPanel = () => {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (!isAdmin) return;
+
+    const fetchCounts = () => {
       fetchPendingPhotoCount();
       fetchPendingPaymentCount();
       fetchPendingChatCount();
-      // Refresh count every 60 seconds (reduced from 30s to minimize API load)
-      const interval = setInterval(() => {
-        fetchPendingPhotoCount();
-        fetchPendingPaymentCount();
-        fetchPendingChatCount();
-      }, 60000);
+    };
 
-      // Listen for real-time admin updates
-      if (onAdminUpdate) {
-        onAdminUpdate((data) => {
-          console.log('[AdminPanel] Admin update received:', data);
-          // Refresh all counts when any update occurs
-          fetchPendingPhotoCount();
-          fetchPendingPaymentCount();
-          fetchPendingChatCount();
-          toast.success(`New update: ${data.updateType || 'Data changed'}`);
-        });
-      }
+    fetchCounts();
 
-      return () => clearInterval(interval);
+    let adminUpdateHandler = null;
+    if (onAdminUpdate) {
+      adminUpdateHandler = (data) => {
+        console.log('[AdminPanel] Admin update received:', data);
+        fetchCounts();
+        toast.success(`New update: ${data.updateType || 'Data changed'}`);
+      };
+      onAdminUpdate(adminUpdateHandler);
     }
-  }, [isAdmin, onAdminUpdate]);
+
+    return () => {};
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   if (!isAdmin) {
     return (

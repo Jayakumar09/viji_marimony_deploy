@@ -233,6 +233,7 @@ const SystemHealth = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [alertsDialogOpen, setAlertsDialogOpen] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
 
   const autoRefreshIntervalRef = useRef(null);
 
