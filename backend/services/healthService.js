@@ -128,7 +128,7 @@ const shouldCreateAlert = async (service, metricName, value, threshold, severity
     });
 
     if (!existingAlert) {
-      const metricValue = typeof value === 'number' ? value.toFixed(1) : value;
+      const metricValue = typeof value === 'number' ? parseFloat(value.toFixed(1)) : value;
       const alert = await prisma.systemAlert.create({
         data: {
           service,
@@ -137,7 +137,7 @@ const shouldCreateAlert = async (service, metricName, value, threshold, severity
           title: customMessage || `${service.toUpperCase()} ${metricName.replace(/_/g, ' ')} Alert`,
           message: customMessage || `${metricName.replace(/_/g, ' ')} is at ${metricValue}%, threshold: ${threshold}%`,
           metricName,
-          metricValue: String(value),
+          metricValue: String(metricValue),
           threshold: String(threshold),
         }
       });
@@ -155,16 +155,16 @@ const shouldCreateAlert = async (service, metricName, value, threshold, severity
 
 const checkBackupAlerts = async () => {
   try {
-    const lastBackup = await prisma.backupLog.findFirst({
+    const lastSuccessfulBackup = await prisma.backupLog.findFirst({
       where: { status: 'completed' },
       orderBy: { completedAt: 'desc' }
     });
 
-    const hoursSinceBackup = lastBackup 
-      ? (Date.now() - new Date(lastBackup.completedAt).getTime()) / (1000 * 60 * 60)
+    const hoursSinceBackup = lastSuccessfulBackup 
+      ? (Date.now() - new Date(lastSuccessfulBackup.completedAt).getTime()) / (1000 * 60 * 60)
       : null;
 
-    if (!lastBackup) {
+    if (!lastSuccessfulBackup) {
       const existingAlert = await prisma.systemAlert.findFirst({
         where: {
           service: 'backup',
@@ -180,8 +180,8 @@ const checkBackupAlerts = async () => {
             service: 'backup',
             alertType: 'error',
             severity: 'critical',
-            title: 'No Backup Found',
-            message: 'No successful backup found. Database backup system may be broken.',
+            title: 'Backup System Failure',
+            message: 'No successful backup found in the last 24 hours. Immediate backup recommended.',
             metricName: 'no_backup',
             metricValue: '0',
             threshold: '1',
@@ -200,16 +200,16 @@ const checkBackupAlerts = async () => {
       });
 
       if (!existingAlert) {
-        const severity = hoursSinceBackup > 48 ? 'critical' : 'error';
+        const severity = hoursSinceBackup > 48 ? 'critical' : 'warning';
         const alert = await prisma.systemAlert.create({
           data: {
             service: 'backup',
             alertType: 'warning',
             severity,
-            title: 'Backup Overdue',
-            message: `Last successful backup was ${Math.floor(hoursSinceBackup)} hours ago. Expected daily backup.`,
+            title: hoursSinceBackup > 48 ? 'Critical: Backup Overdue' : 'Backup Overdue',
+            message: `No successful backup in the last ${Math.floor(hoursSinceBackup)} hours. Last backup: ${lastSuccessfulBackup.fileName || 'unknown'}.`,
             metricName: 'backup_stale',
-            metricValue: hoursSinceBackup.toFixed(1),
+            metricValue: parseFloat(hoursSinceBackup.toFixed(1)),
             threshold: '24',
           }
         });
@@ -483,9 +483,12 @@ const checkCloudinaryHealth = async () => {
 const checkGoogleDriveHealth = async () => {
   try {
     let googleDriveConnected = false;
-    let totalBackups = 0;
+    let driveBackups = [];
     let lastBackup = null;
     let recentBackups = [];
+    let totalBackups = 0;
+    let hoursSinceBackup = null;
+    let backupOverdue = false;
 
     try {
       const googleDriveService = require('./googleDriveService');
@@ -493,6 +496,7 @@ const checkGoogleDriveHealth = async () => {
       
       if (googleDriveConnected) {
         const files = await googleDriveService.listFiles();
+        driveBackups = files;
         totalBackups = files.length;
         
         if (files.length > 0) {
@@ -504,37 +508,55 @@ const checkGoogleDriveHealth = async () => {
             googleDriveId: files[0].id,
             location: 'google_drive'
           };
+          hoursSinceBackup = (Date.now() - new Date(files[0].createdTime).getTime()) / (1000 * 60 * 60);
         }
 
         const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         recentBackups = files.filter(f => new Date(f.createdTime) >= oneWeekAgo);
       }
     } catch (gdError) {
-      console.log('[Health] Google Drive service not available, using BackupLog');
+      console.log('[Health] Google Drive service not available, checking BackupLog');
     }
 
     const backupLogs = await prisma.backupLog.findMany({
       where: { status: 'completed' },
-      orderBy: { completedAt: 'desc' },
-      take: 1
+      orderBy: { completedAt: 'desc' }
     });
 
     const lastBackupLog = backupLogs[0];
     
-    if (!lastBackup && lastBackupLog) {
-      lastBackup = {
-        fileName: lastBackupLog.fileName,
-        fileSize: lastBackupLog.fileSize ? Number(lastBackupLog.fileSize) : null,
-        fileSizeFormatted: lastBackupLog.fileSize ? formatBytesMB(Number(lastBackupLog.fileSize)) : null,
-        completedAt: lastBackupLog.completedAt,
-        triggeredBy: lastBackupLog.triggeredBy,
-        location: lastBackupLog.googleDriveId ? 'google_drive' : 'local'
-      };
+    if (lastBackupLog) {
+      const logBackupTime = new Date(lastBackupLog.completedAt).getTime();
+      
+      if (!lastBackup) {
+        lastBackup = {
+          fileName: lastBackupLog.fileName,
+          fileSize: lastBackupLog.fileSize ? Number(lastBackupLog.fileSize) : null,
+          fileSizeFormatted: lastBackupLog.fileSize ? formatBytesMB(Number(lastBackupLog.fileSize)) : null,
+          completedAt: lastBackupLog.completedAt,
+          triggeredBy: lastBackupLog.triggeredBy,
+          location: lastBackupLog.googleDriveId ? 'google_drive' : 'local'
+        };
+        hoursSinceBackup = (Date.now() - logBackupTime) / (1000 * 60 * 60);
+      } else {
+        const driveBackupTime = new Date(lastBackup.completedAt).getTime();
+        if (logBackupTime > driveBackupTime) {
+          lastBackup = {
+            fileName: lastBackupLog.fileName,
+            fileSize: lastBackupLog.fileSize ? Number(lastBackupLog.fileSize) : null,
+            fileSizeFormatted: lastBackupLog.fileSize ? formatBytesMB(Number(lastBackupLog.fileSize)) : null,
+            completedAt: lastBackupLog.completedAt,
+            triggeredBy: lastBackupLog.triggeredBy,
+            location: lastBackupLog.googleDriveId ? 'google_drive' : 'local'
+          };
+          hoursSinceBackup = (Date.now() - logBackupTime) / (1000 * 60 * 60);
+        }
+      }
     }
 
-    const hoursSinceBackup = lastBackup 
-      ? (Date.now() - new Date(lastBackup.completedAt).getTime()) / (1000 * 60 * 60)
-      : null;
+    if (hoursSinceBackup !== null) {
+      backupOverdue = hoursSinceBackup > 24;
+    }
 
     await checkBackupAlerts();
 
@@ -548,18 +570,20 @@ const checkGoogleDriveHealth = async () => {
       nextScheduledRun.setDate(nextScheduledRun.getDate() + 1);
     }
 
+    const successfulBackupsInLog = backupLogs.filter(b => b.status === 'completed').length;
+
     return {
-      status: totalBackups > 0 || lastBackup ? 'healthy' : 'no_backups',
+      status: totalBackups > 0 || successfulBackupsInLog > 0 ? 'healthy' : 'no_backups',
       connected: googleDriveConnected,
       googleDriveConfigured: googleDriveConnected,
-      totalBackups: Math.max(totalBackups, backupLogs.length),
+      totalBackups: googleDriveConnected ? totalBackups : successfulBackupsInLog,
       lastBackup,
       hoursSinceBackup: hoursSinceBackup ? parseFloat(hoursSinceBackup.toFixed(1)) : null,
-      backupOverdue: hoursSinceBackup !== null && hoursSinceBackup > 24,
+      backupOverdue,
       nextScheduledRun: nextScheduledRun.toISOString(),
       recentBackupCount: recentBackups.length,
       retentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS) || 30,
-      backupLogsCount: backupLogs.length
+      backupLogsCount: successfulBackupsInLog
     };
   } catch (error) {
     console.error('[Health] Google Drive check failed:', error.message);
