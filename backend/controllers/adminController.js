@@ -358,6 +358,43 @@ const checkPhotoVerificationStatus = async (userId) => {
   }
 };
 
+// Approve photo verification
+const approvePhoto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.admin?.id || 'system';
+    
+    await prisma.photoVerification.update({
+      where: { id },
+      data: { status: 'APPROVED', reviewedAt: new Date(), reviewedBy: adminId }
+    });
+    
+    res.json({ success: true, message: 'Photo approved' });
+  } catch (error) {
+    console.error('approvePhoto error:', error);
+    res.status(500).json({ error: 'Failed to approve photo' });
+  }
+};
+
+// Reject photo verification
+const rejectPhoto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const adminId = req.admin?.id || 'system';
+    
+    await prisma.photoVerification.update({
+      where: { id },
+      data: { status: 'REJECTED', reviewedAt: new Date(), reviewedBy: adminId, rejectionReason: reason }
+    });
+    
+    res.json({ success: true, message: 'Photo rejected' });
+  } catch (error) {
+    console.error('rejectPhoto error:', error);
+    res.status(500).json({ error: 'Failed to reject photo' });
+  }
+};
+
 // ============ SUBSCRIPTION MANAGEMENT ============
 
 // Subscription plans configuration
