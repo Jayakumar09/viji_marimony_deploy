@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
   Box, Drawer, AppBar, Toolbar, Typography, List, ListItem, ListItemButton,
   ListItemIcon, ListItemText, Card, CardContent, CardMedia, Grid, Button,
@@ -373,33 +374,16 @@ const Dashboard = () => {
     premiumUsers: 0,
     messagesToday: 0
   });
-  const [loading, setLoading] = useState(true);
   const [recentUsers, setRecentUsers] = useState([]);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
-      const adminToken = localStorage.getItem('adminToken');
-      console.log('[DEBUG fetchDashboardData] adminToken:', adminToken ? 'exists' : 'null');
-      console.log('[DEBUG fetchDashboardData] Calling /admin/dashboard...');
-      
       const response = await api.get('/admin/dashboard');
-      console.log('[DEBUG fetchDashboardData] Response:', response);
-      console.log('[DEBUG fetchDashboardData] Response.data:', response.data);
-      console.log('[DEBUG fetchDashboardData] Response.data.totalUsers:', response.data?.totalUsers);
-      
       setStats(response.data);
       if (response.data.recentUsers) {
         setRecentUsers(response.data.recentUsers);
       }
     } catch (error) {
-      console.error('[DEBUG fetchDashboardData] Failed to fetch dashboard data:', error);
-      console.error('[DEBUG fetchDashboardData] Error response:', error.response);
-      console.error('[DEBUG fetchDashboardData] Error message:', error.message);
-      // Don't use mock data - show error state instead
       setStats({
         totalUsers: 0,
         verifiedUsers: 0,
@@ -408,10 +392,17 @@ const Dashboard = () => {
         premiumUsers: 0,
         messagesToday: 0
       });
-    } finally {
-      setLoading(false);
     }
-  };
+  }, []);
+
+  const { loading } = usePageRefresh(fetchDashboardData, {
+    enabled: true,
+    refreshOnMount: true,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    minInterval: 10000,
+    throttleMs: 5000
+  });
 
   const StatCard = ({ title, value, icon, color, trend, subtitle }) => (
     <Card sx={{
@@ -3588,17 +3579,10 @@ const DatabaseBackup = () => {
     totalBackups: 0
   });
   const [backups, setBackups] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  useEffect(() => {
-    fetchBackupData();
-  }, []);
-
-  const fetchBackupData = async () => {
-    setLoading(true);
+  const fetchBackupData = useCallback(async () => {
     try {
       const [statusRes, backupsRes] = await Promise.all([
         api.get('/admin/backup/status'),
@@ -3607,34 +3591,27 @@ const DatabaseBackup = () => {
       setStatus(statusRes.data);
       setBackups(backupsRes.data.backups || []);
     } catch (error) {
-      console.error('Failed to fetch backup data:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to load backup data',
-        severity: 'error'
-      });
-    } finally {
-      setLoading(false);
+      toast.error('Failed to load backup data');
     }
-  };
+  }, []);
+
+  const { loading } = usePageRefresh(fetchBackupData, {
+    enabled: true,
+    refreshOnMount: true,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    minInterval: 15000,
+    throttleMs: 5000
+  });
 
   const handleCreateBackup = async () => {
     setCreating(true);
     try {
       const response = await api.post('/admin/backup/create');
-      setSnackbar({
-        open: true,
-        message: `Backup created successfully: ${response.data.fileName}`,
-        severity: 'success'
-      });
+      toast.success(`Backup created: ${response.data.fileName}`);
       await fetchBackupData();
     } catch (error) {
-      console.error('Backup failed:', error);
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.error || 'Failed to create backup',
-        severity: 'error'
-      });
+      toast.error(error.response?.data?.error || 'Failed to create backup');
     } finally {
       setCreating(false);
     }
@@ -3653,42 +3630,24 @@ const DatabaseBackup = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      setSnackbar({
-        open: true,
-        message: 'Backup downloaded successfully',
-        severity: 'success'
-      });
+      toast.success('Backup downloaded');
     } catch (error) {
-      console.error('Download failed:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to download backup',
-        severity: 'error'
-      });
+      toast.error('Failed to download backup');
     }
   };
 
   const handleDelete = async (backup) => {
-    if (!window.confirm(`Are you sure you want to delete "${backup.name}"? This cannot be undone.`)) {
+    if (!window.confirm(`Delete "${backup.name}"? This cannot be undone.`)) {
       return;
     }
 
     setDeleting(backup.id);
     try {
       await api.delete(`/admin/backup/${backup.id}`);
-      setSnackbar({
-        open: true,
-        message: 'Backup deleted successfully',
-        severity: 'success'
-      });
+      toast.success('Backup deleted');
       await fetchBackupData();
     } catch (error) {
-      console.error('Delete failed:', error);
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.error || 'Failed to delete backup',
-        severity: 'error'
-      });
+      toast.error(error.response?.data?.error || 'Failed to delete backup');
     } finally {
       setDeleting(null);
     }
@@ -3736,7 +3695,7 @@ const DatabaseBackup = () => {
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
-            onClick={fetchBackupData}
+            onClick={() => fetchBackupData()}
           >
             Refresh
           </Button>

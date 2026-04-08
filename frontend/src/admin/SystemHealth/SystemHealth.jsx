@@ -14,6 +14,7 @@ import {
 } from '@mui/icons-material';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { usePageRefresh } from '../../hooks/usePageRefresh';
 
 const POLLING_INTERVAL_MS = 60000;
 const THROTTLE_MS = 5000;
@@ -227,39 +228,15 @@ const SystemHealth = () => {
   const [metrics, setMetrics] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [alertsDialogOpen, setAlertsDialogOpen] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  const isFetchingRef = useRef(false);
-  const lastFetchTimeRef = useRef(0);
-  const isPageVisibleRef = useRef(true);
   const autoRefreshIntervalRef = useRef(null);
 
-  const fetchAllData = useCallback(async (isManualRefresh = false) => {
-    const now = Date.now();
-    
-    if (isFetchingRef.current) {
-      return;
-    }
-    
-    if (!isManualRefresh && now - lastFetchTimeRef.current < THROTTLE_MS) {
-      return;
-    }
-    
-    if (!isPageVisibleRef.current && !isManualRefresh) {
-      return;
-    }
-
-    isFetchingRef.current = true;
-    if (isManualRefresh) {
-      setRefreshing(true);
-    }
-
+  const fetchAllData = useCallback(async () => {
     try {
       const [metricsResponse, alertsResponse] = await Promise.all([
         api.get('/admin/health/metrics'),
@@ -270,47 +247,33 @@ const SystemHealth = () => {
       setAlerts(alertsResponse.data.alerts || []);
       setUnreadCount(alertsResponse.data.unreadCount || 0);
       setLastUpdated(new Date());
-      lastFetchTimeRef.current = now;
     } catch (error) {
-      console.error('Failed to fetch health data:', error);
-      if (isManualRefresh) {
-        toast.error('Failed to fetch health metrics');
-      }
-    } finally {
-      isFetchingRef.current = false;
-      setLoading(false);
-      setRefreshing(false);
+      toast.error('Failed to fetch health metrics');
     }
   }, []);
 
-  useEffect(() => {
-    fetchAllData(true);
+  const { loading, refresh } = usePageRefresh(fetchAllData, {
+    enabled: true,
+    refreshOnMount: true,
+    refreshOnVisible: true,
+    refreshOnFocus: true,
+    minInterval: MIN_REFRESH_INTERVAL_MS,
+    throttleMs: THROTTLE_MS
+  });
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchAllData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [fetchAllData]);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      isPageVisibleRef.current = document.visibilityState === 'visible';
-      
-      if (document.visibilityState === 'visible' && autoRefresh) {
-        const now = Date.now();
-        if (now - lastFetchTimeRef.current >= MIN_REFRESH_INTERVAL_MS) {
-          fetchAllData();
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [autoRefresh, fetchAllData]);
 
   useEffect(() => {
     if (autoRefresh) {
       autoRefreshIntervalRef.current = setInterval(() => {
-        if (isPageVisibleRef.current) {
-          fetchAllData();
-        }
+        handleRefresh();
       }, POLLING_INTERVAL_MS);
     } else {
       if (autoRefreshIntervalRef.current) {
@@ -324,7 +287,7 @@ const SystemHealth = () => {
         clearInterval(autoRefreshIntervalRef.current);
       }
     };
-  }, [autoRefresh, fetchAllData]);
+  }, [autoRefresh, handleRefresh]);
 
   const markAllRead = async () => {
     try {
@@ -341,7 +304,7 @@ const SystemHealth = () => {
     if (!window.confirm('Delete read alerts older than 30 days?')) return;
     try {
       await api.delete('/admin/health/alerts/cleanup?days=30');
-      fetchAllData();
+      handleRefresh();
       toast.success('Old alerts cleaned up');
     } catch (error) {
       toast.error('Failed to clear old alerts');
@@ -356,7 +319,7 @@ const SystemHealth = () => {
       const response = await api.post('/admin/health/backup-execute');
       if (response.data.success) {
         toast.success('Backup executed successfully!');
-        setTimeout(() => fetchAllData(true), 2000);
+        setTimeout(() => handleRefresh(), 2000);
       } else {
         toast.error(response.data.error || 'Backup failed');
       }
@@ -374,7 +337,7 @@ const SystemHealth = () => {
       if (response.data.success) {
         setMetrics(response.data.metrics);
         setLastUpdated(new Date());
-        fetchAllData();
+        handleRefresh();
         toast.success('Service check completed');
       }
     } catch (error) {
@@ -456,7 +419,7 @@ const SystemHealth = () => {
           <Button
             variant="contained"
             startIcon={<RefreshIcon />}
-            onClick={() => fetchAllData(true)}
+            onClick={handleRefresh}
             disabled={refreshing}
             sx={{ borderRadius: 2 }}
           >
