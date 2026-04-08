@@ -358,6 +358,78 @@ const checkPhotoVerificationStatus = async (userId) => {
   }
 };
 
+// Get all users with verification status
+const getAllUsers = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = '', status = 'all' } = req.query;
+    const skip = (page - 1) * limit;
+    
+    let where = {};
+    
+    if (search) {
+      where.OR = [
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
+        { email: { contains: search } }
+      ];
+    }
+    
+    if (status && status !== 'all') {
+      switch (status) {
+        case 'active': where.isActive = true; break;
+        case 'inactive': where.isActive = false; break;
+        case 'verified': where.isVerified = true; break;
+        case 'premium': where.isPremium = true; break;
+      }
+    }
+    
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          customId: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          gender: true,
+          age: true,
+          city: true,
+          state: true,
+          country: true,
+          education: true,
+          profession: true,
+          profilePhoto: true,
+          isVerified: true,
+          isPremium: true,
+          isActive: true,
+          photosVerified: true,
+          subscriptionTier: true,
+          createdAt: true
+        }
+      }),
+      prisma.user.count({ where })
+    ]);
+    
+    res.json({
+      users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('getAllUsers error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+};
+
 // Approve photo verification
 const approvePhoto = async (req, res) => {
   try {
