@@ -93,12 +93,12 @@ const AdminPanel = () => {
       fetchPendingPhotoCount();
       fetchPendingPaymentCount();
       fetchPendingChatCount();
-      // Refresh count every 30 seconds
+      // Refresh count every 60 seconds (reduced from 30s to minimize API load)
       const interval = setInterval(() => {
         fetchPendingPhotoCount();
         fetchPendingPaymentCount();
         fetchPendingChatCount();
-      }, 30000);
+      }, 60000);
 
       // Listen for real-time admin updates
       if (onAdminUpdate) {
@@ -3080,14 +3080,14 @@ const AdminChat = () => {
 
   // No automatic scrolling - admin controls scroll position
 
-  // Poll for new messages every 5 seconds
+  // Poll for new messages every 15 seconds (reduced from 5s to minimize API load)
   useEffect(() => {
     const interval = setInterval(() => {
       fetchConversations(true);  // Pass true to indicate polling
       if (selectedUser) {
         fetchMessages(selectedUser.id, true);  // Pass true to indicate polling
       }
-    }, 5000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [selectedUser]);
 
