@@ -139,10 +139,8 @@ const adminMiddleware = async (req, res, next) => {
     }
     
     req.admin = admin;
-    console.log('[DEBUG adminMiddleware] Passing to next()');
     next();
   } catch (error) {
-    console.error('[DEBUG adminMiddleware] Error:', error);
     res.status(500).json({ error: 'Server error in admin authentication' });
   }
 };
@@ -155,29 +153,34 @@ const getPendingVerifications = async (req, res) => {
     const { page = 1, limit = 10, status = 'PENDING' } = req.query;
     const skip = (page - 1) * limit;
     
-    const photos = await prisma.photoVerification.findMany({
-      where: { status },
-      skip,
-      take: parseInt(limit),
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            city: true,
-            state: true
+    const [photos, total] = await Promise.all([
+      prisma.photoVerification.findMany({
+        where: { status },
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              city: true,
+              state: true
+            }
           }
         }
-      }
-    });
+      }),
+      prisma.photoVerification.count({ where: { status } })
+    ]);
     
-    const total = await prisma.photoVerification.count({
-      where: { status }
-  });
+    res.json({ photos, total });
+  } catch (error) {
+    console.error('getPendingVerifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch verifications' });
+  }
 };
 
 // Approve/reject user profile manually
