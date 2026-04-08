@@ -1,4 +1,3 @@
-const { PrismaClient } = require('@prisma/client');
 const os = require('os');
 
 const PERFORMANCE_THRESHOLDS = {
@@ -161,7 +160,7 @@ class MemoryMonitor {
 class CPUMonitor {
   constructor() {
     this.samples = [];
-    this.maxSamples = 60;
+    this.maxSamples = 30;
   }
 
   recordSample() {
@@ -169,15 +168,11 @@ class CPUMonitor {
     const cpuCount = os.cpus().length;
     const cpuUsage = (load[0] / cpuCount) * 100;
 
-    this.samples.push({
-      usage: cpuUsage,
-      timestamp: Date.now()
-    });
-
-    if (this.samples.length > this.maxSamples) {
+    if (this.samples.length >= this.maxSamples) {
       this.samples.shift();
     }
-
+    
+    this.samples.push(cpuUsage);
     return cpuUsage;
   }
 
@@ -186,7 +181,7 @@ class CPUMonitor {
       return { current: 0, average: 0, peak: 0 };
     }
 
-    const usages = this.samples.map(s => s.usage);
+    const usages = this.samples;
     const current = usages[usages.length - 1];
     const average = usages.reduce((a, b) => a + b, 0) / usages.length;
     const peak = Math.max(...usages);

@@ -3,6 +3,7 @@ const router = express.Router();
 const chatController = require('../controllers/chatController');
 const { authMiddleware, adminAuthMiddleware } = require('../middleware/auth');
 const { isAdmin, isAdminOrMainAdmin } = require('../middleware/roleMiddleware');
+const { withCache, clearCache } = require('../middleware/cache');
 
 // User routes (require user authentication)
 router.post('/user/send', authMiddleware, chatController.chatUpload.single('image'), chatController.sendUserMessage);
@@ -14,9 +15,9 @@ router.put('/user/mark-read', authMiddleware, chatController.markAsRead);
 // Admin routes (require admin authentication)
 router.post('/admin/send', isAdminOrMainAdmin, chatController.chatUpload.single('image'), chatController.sendAdminMessage);
 router.get('/admin/conversations', isAdminOrMainAdmin, chatController.getAdminChats);
-router.get('/admin/unread-count', isAdminOrMainAdmin, chatController.getAdminUnreadCount);
+router.get('/admin/unread-count', isAdminOrMainAdmin, withCache('chat', 30000), chatController.getAdminUnreadCount);
 router.get('/admin/chat/:userId', isAdminOrMainAdmin, chatController.getAdminChatWithUser);
-router.put('/admin/mark-read/:userId', isAdminOrMainAdmin, chatController.markAsRead);
+router.put('/admin/mark-read/:userId', isAdminOrMainAdmin, (req, res, next) => { clearCache('chat'); next(); }, chatController.markAsRead);
 
 // Delete message route (both user and admin can delete)
 router.delete('/message/:messageId', authMiddleware, chatController.deleteMessage);

@@ -1,8 +1,9 @@
- const express = require('express');
+const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const upload = multer({ memory: true });
+const { withCache, clearCache } = require('../middleware/cache');
 const { 
   adminMiddleware,
   getPendingVerifications,
@@ -74,8 +75,8 @@ router.post('/login', async (req, res) => {
 // All admin routes require authentication
 router.use(adminMiddleware);
 
-// Dashboard
-router.get('/dashboard', getDashboardStats);
+// Dashboard (cached for 30 seconds)
+router.get('/dashboard', withCache('dashboard', 30000), getDashboardStats);
 
 // Photo verification routes
 router.get('/photos/pending', getPendingVerifications);

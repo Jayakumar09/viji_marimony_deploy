@@ -14,6 +14,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const { withCache, clearCache } = require('../middleware/cache');
 
 // Serve uploaded payment proof files
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -97,7 +98,7 @@ router.get('/admin/all', adminAuthMiddleware, manualPaymentController.getAdminPa
  * GET /api/payments/admin/stats
  * Get payment statistics (Admin)
  */
-router.get('/admin/stats', adminAuthMiddleware, manualPaymentController.getPaymentStats);
+router.get('/admin/stats', adminAuthMiddleware, withCache('payments', 30000), manualPaymentController.getPaymentStats);
 
 /**
  * GET /api/payments/admin/notifications

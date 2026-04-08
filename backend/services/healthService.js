@@ -22,14 +22,23 @@ const POSTGRES_LIMITS = {
 
 const CACHE_TTL_MS = 30000;
 const STARTUP_GRACE_MS = 120000;
+const MAX_CACHE_SIZE_MB = 10;
 
 const startupTime = Date.now();
 const isStartupPhase = () => Date.now() - startupTime < STARTUP_GRACE_MS;
 const cache = {
-  healthMetrics: { data: null, timestamp: 0 },
-  backupMetadata: { data: null, timestamp: 0 },
-  postgresHealth: { data: null, timestamp: 0 },
-  freshAlerts: { data: null, timestamp: 0 }
+  healthMetrics: { data: null, timestamp: 0, size: 0 },
+  backupMetadata: { data: null, timestamp: 0, size: 0 },
+  postgresHealth: { data: null, timestamp: 0, size: 0 },
+  freshAlerts: { data: null, timestamp: 0, size: 0 }
+};
+
+const estimateSize = (obj) => {
+  try {
+    return JSON.stringify(obj).length * 2;
+  } catch {
+    return 1024;
+  }
 };
 
 const isCacheValid = (cacheKey) => {
@@ -44,15 +53,20 @@ const getCached = (cacheKey) => {
 };
 
 const setCached = (cacheKey, data) => {
-  cache[cacheKey] = { data, timestamp: Date.now() };
+  const size = estimateSize(data);
+  if (size > MAX_CACHE_SIZE_MB * 1024 * 1024) {
+    console.log(`[Cache] Skipping large cache entry: ${cacheKey} (${(size / 1024 / 1024).toFixed(2)}MB)`);
+    return;
+  }
+  cache[cacheKey] = { data, timestamp: Date.now(), size };
 };
 
 const invalidateCache = (cacheKey = null) => {
   if (cacheKey) {
-    cache[cacheKey] = { data: null, timestamp: 0 };
+    cache[cacheKey] = { data: null, timestamp: 0, size: 0 };
   } else {
     Object.keys(cache).forEach(key => {
-      cache[key] = { data: null, timestamp: 0 };
+      cache[key] = { data: null, timestamp: 0, size: 0 };
     });
   }
 };
