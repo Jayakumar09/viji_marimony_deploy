@@ -391,7 +391,8 @@ const Dashboard = () => {
     }
   }, []);
 
-  usePageRefresh(fetchDashboardData);
+  const [loading, setLoading] = useState(false);
+  usePageRefresh(() => { setLoading(true); fetchDashboardData().finally(() => setLoading(false)); });
 
   const StatCard = ({ title, value, icon, color, trend, subtitle }) => (
     <Card sx={{
@@ -3568,10 +3569,12 @@ const DatabaseBackup = () => {
     totalBackups: 0
   });
   const [backups, setBackups] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(null);
 
   const fetchBackupData = useCallback(async () => {
+    setLoading(true);
     try {
       const [statusRes, backupsRes] = await Promise.all([
         api.get('/admin/backup/status'),
@@ -3581,6 +3584,8 @@ const DatabaseBackup = () => {
       setBackups(backupsRes.data.backups || []);
     } catch (error) {
       toast.error('Failed to load backup data');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
