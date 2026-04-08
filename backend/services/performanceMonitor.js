@@ -2,14 +2,14 @@ const { PrismaClient } = require('@prisma/client');
 const os = require('os');
 
 const PERFORMANCE_THRESHOLDS = {
-  CPU_WARNING: 70,
-  CPU_CRITICAL: 90,
-  MEMORY_WARNING: 70,
-  MEMORY_CRITICAL: 95,
-  RESPONSE_TIME_WARNING: 500,
+  CPU_WARNING: 60,
+  CPU_CRITICAL: 80,
+  MEMORY_WARNING: 75,
+  MEMORY_CRITICAL: 90,
+  RESPONSE_TIME_WARNING: 800,
   RESPONSE_TIME_CRITICAL: 2000,
-  HEAP_WARNING: 80,
-  HEAP_CRITICAL: 95
+  HEAP_WARNING: 75,
+  HEAP_CRITICAL: 90
 };
 
 const RESTART_GRACE_PERIOD_MS = 120000;
@@ -289,6 +289,17 @@ const logPerformance = (label, fn) => {
 };
 
 memoryMonitor.start();
+
+if (global.gc) {
+  setInterval(() => {
+    const memUsage = process.memoryUsage();
+    const heapPercent = (memUsage.heapUsed / memUsage.heapTotal) * 100;
+    if (heapPercent > 80) {
+      console.log('[GC] Running garbage collection...');
+      global.gc();
+    }
+  }, 120000);
+}
 
 process.on('SIGTERM', () => {
   memoryMonitor.stop();

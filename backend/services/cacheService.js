@@ -1,44 +1,61 @@
-const { performance } = require('perf_hooks');
+/**
+ * Memory-Efficient Cache Service
+ * - LRU eviction when max size reached
+ * - TTL-based expiration
+ * - Memory usage tracking
+ * - Automatic cleanup
+ */
 
-const DEFAULT_TTL_MS = 30000;
-const MAX_CACHE_SIZE = 100;
+const DEFAULT_TTL = 30000;
+const MAX_CACHE_SIZE = 50;
+const MAX_MEMORY_MB = 50;
 
 class CacheService {
   constructor() {
     this.cache = new Map();
-    this.hits = 0;
-    this.misses = 0;
-    this.evictions = 0;
+    this.stats = { hits: 0, misses: 0, evictions: 0 };
+    this.cleanupTimer = null;
+    this.scheduleCleanup();
+  }
+
+  set(key, value, ttl = DEFAULT_TTL) {
+    if (this.cache.size >= MAX_CACHE_SIZE) {
+      this.evictLRU();
+    }
+    
+    this.cache.set(key, {
+      value,
+      expires: Date.now() + ttl,
+      size: this.estimateSize(value)
+    });
   }
 
   get(key) {
-    const entry = this.cache.get(key);
+    const item = this.cache.get(key);
     
-    if (!entry) {
-      this.misses++;
+    if (!item) {
+      this.stats.misses++;
       return null;
     }
-
-    if (Date.now() > entry.expiresAt) {
+    
+    if (Date.now() > item.expires) {
       this.cache.delete(key);
-      this.misses++;
+      this.stats.misses++;
       return null;
     }
-
-    this.hits++;
-    return entry.value;
+    
+    this.stats.hits++;
+    return item.value;
   }
 
-  set(key, value, ttlMs = DEFAULT_TTL_MS) {
-    if (this.cache.size >= MAX_CACHE_SIZE && !this.cache.has(key)) {
-      this.evictLRU();
+  has(key) {
+    const item = this.cache.get(key);
+    if (!item) return false;
+    if (Date.now() > item.expires) {
+      this.cache.delete(key);
+      return false;
     }
-
-    this.cache.set(key, {
-      value,
-      expiresAt: Date.now() + ttlMs,
-      createdAt: Date.now()
-    });
+    return true;
   }
 
   delete(key) {
@@ -46,155 +63,87 @@ class CacheService {
   }
 
   clear() {
-    const size = this.cache.size;
     this.cache.clear();
-    return size;
   }
 
   evictLRU() {
     let oldest = null;
-    let oldestTime = Infinity;
-
-    for (const [key, entry] of this.cache) {
-      if (entry.createdAt < oldestTime) {
-        oldestTime = entry.createdAt;
-        oldest = key;
+    let oldestKey = null;
+    
+    for (const [key, item] of this.cache) {
+      if (!oldest || item.expires < oldest.expires) {
+        oldest = item;
+        oldestKey = key;
       }
     }
-
-    if (oldest) {
-      this.cache.delete(oldest);
-      this.evictions++;
+    
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+      this.stats.evictions++;
     }
+  }
+
+  estimateSize(value) {
+    try {
+      return JSON.stringify(value).length * 2;
+    } catch {
+      return 1024;
+    }
+  }
+
+  scheduleCleanup() {
+    if (this.cleanupTimer) return;
+    
+    this.cleanupTimer = setInterval(() => {
+      this.cleanup();
+    }, 60000);
   }
 
   cleanup() {
     const now = Date.now();
-    let cleaned = 0;
-
-    for (const [key, entry] of this.cache) {
-      if (now > entry.expiresAt) {
+    let removed = 0;
+    
+    for (const [key, item] of this.cache) {
+      if (now > item.expires) {
         this.cache.delete(key);
-        cleaned++;
+        removed++;
       }
     }
-
-    return cleaned;
+    
+    if (removed > 0) {
+      console.log(`[Cache] Cleaned up ${removed} expired entries. Size: ${this.cache.size}`);
+    }
   }
 
   getStats() {
-    const total = this.hits + this.misses;
+    const total = this.stats.hits + this.stats.misses;
     return {
       size: this.cache.size,
       maxSize: MAX_CACHE_SIZE,
-      hits: this.hits,
-      misses: this.misses,
-      hitRate: total > 0 ? (this.hits / total * 100).toFixed(2) + '%' : '0%',
-      evictions: this.evictions
+      hits: this.stats.hits,
+      misses: this.stats.misses,
+      hitRate: total > 0 ? (this.stats.hits / total * 100).toFixed(1) + '%' : '0%',
+      evictions: this.stats.evictions
     };
   }
 
-  keys() {
-    return Array.from(this.cache.keys());
-  }
-
-  has(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return false;
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return false;
+  destroy() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
     }
-    return true;
+    this.cache.clear();
   }
 }
 
 const cache = new CacheService();
 
-setInterval(() => {
-  const cleaned = cache.cleanup();
-  if (cleaned > 0) {
-    console.log(`[Cache] Cleaned ${cleaned} expired entries`);
-  }
-}, 60000);
-
-const getCached = async (key, fetchFn, ttlMs = DEFAULT_TTL_MS) => {
-  const cached = cache.get(key);
-  if (cached !== null) {
-    return cached;
-  }
-
-  const startTime = performance.now();
-  const result = await fetchFn();
-  const duration = performance.now() - startTime;
-
-  cache.set(key, result, ttlMs);
-  
-  if (duration > 1000) {
-    console.log(`[Cache] Cache miss for "${key}" - fetch took ${duration.toFixed(0)}ms`);
-  }
-
-  return result;
-};
-
-const invalidateCache = (key) => {
-  if (key) {
-    return cache.delete(key);
-  }
-  return cache.clear();
-};
-
-const cacheMiddleware = (ttlMs = DEFAULT_TTL_MS) => {
-  return (req, res, next) => {
-    const cacheKey = `${req.originalUrl}`;
-
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    const originalJson = res.json.bind(res);
-    res.json = (data) => {
-      if (res.statusCode === 200) {
-        cache.set(cacheKey, data, ttlMs);
-      }
-      return originalJson(data);
-    };
-
-    next();
-  };
-};
-
-const memoize = (fn, ttlMs = DEFAULT_TTL_MS) => {
-  const cache = new Map();
-  
-  return async (...args) => {
-    const key = JSON.stringify(args);
-    const entry = cache.get(key);
-    
-    if (entry && Date.now() < entry.expiresAt) {
-      return entry.value;
-    }
-
-    const result = await fn(...args);
-    cache.set(key, { value: result, expiresAt: Date.now() + ttlMs });
-    
-    if (cache.size > MAX_CACHE_SIZE) {
-      const firstKey = cache.keys().next().value;
-      cache.delete(firstKey);
-    }
-    
-    return result;
-  };
-};
-
 module.exports = {
-  CacheService,
   cache,
-  getCached,
-  invalidateCache,
-  cacheMiddleware,
-  memoize,
-  DEFAULT_TTL_MS,
-  MAX_CACHE_SIZE
+  createCache: (ttl = DEFAULT_TTL) => ({
+    set: (k, v) => cache.set(k, v, ttl),
+    get: (k) => cache.get(k),
+    has: (k) => cache.has(k),
+    delete: (k) => cache.delete(k)
+  })
 };

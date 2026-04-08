@@ -93,9 +93,6 @@ const logAdminActivityToBothTables = async ({ adminId, action, targetUserId, det
 // Admin middleware
 const adminMiddleware = async (req, res, next) => {
   try {
-    console.log('[DEBUG adminMiddleware] Request received to:', req.originalUrl);
-    console.log('[DEBUG adminMiddleware] Authorization header:', req.header('Authorization')?.substring(0, 20) + '...');
-    
     const jwt = require('jsonwebtoken');
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
@@ -306,16 +303,8 @@ const getAllUsers = async (req, res) => {
     const skip = (page - 1) * limit;
     const adminId = req.admin.id;
     
-    // DEBUG: Log database connection info
-    const dbType = process.env.DATABASE_URL?.startsWith('postgresql') ? 'PostgreSQL (AWS RDS)' : 'SQLite';
-    console.log(`[DEBUG getAllUsers] Database type: ${dbType}`);
-    console.log(`[DEBUG getAllUsers] DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
-    console.log(`[DEBUG getAllUsers] Request received - adminId: ${adminId}, query:`, req.query);
-    
-    // Build where clause
     let where = {};
     
-    // Search filter
     if (search) {
       where.OR = [
         { firstName: { contains: search } },
@@ -324,105 +313,48 @@ const getAllUsers = async (req, res) => {
       ];
     }
     
-    // Status filter
     if (status && status !== 'all') {
       switch (status) {
-        case 'active':
-          where.isActive = true;
-          break;
-        case 'inactive':
-          where.isActive = false;
-          break;
-        case 'verified':
-          where.isVerified = true;
-          break;
-        case 'premium':
-          where.isPremium = true;
-          break;
-        default:
-          break;
+        case 'active': where.isActive = true; break;
+        case 'inactive': where.isActive = false; break;
+        case 'verified': where.isVerified = true; break;
+        case 'premium': where.isPremium = true; break;
       }
     }
     
-    console.log(`[DEBUG getAllUsers] Query params - page: ${page}, limit: ${limit}, search: '${search}', status: '${status}'`);
-    console.log(`[DEBUG getAllUsers] Where clause:`, JSON.stringify(where));
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          customId: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          gender: true,
+          age: true,
+          city: true,
+          state: true,
+          country: true,
+          education: true,
+          profession: true,
+          profilePhoto: true,
+          isVerified: true,
+          isPremium: true,
+          isActive: true,
+          photosVerified: true,
+          subscriptionTier: true,
+          createdAt: true
+        }
+      }),
+      prisma.user.count({ where })
+    ]);
     
-    const users = await prisma.user.findMany({
-      where,
-      skip,
-      take: parseInt(limit),
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        customId: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        gender: true,
-        dateOfBirth: true,
-        age: true,
-        community: true,
-        subCaste: true,
-        city: true,
-        state: true,
-        country: true,
-        education: true,
-        profession: true,
-        income: true,
-        maritalStatus: true,
-        height: true,
-        weight: true,
-        complexion: true,
-        physicalStatus: true,
-        drinkingHabit: true,
-        smokingHabit: true,
-        diet: true,
-        profilePhoto: true,
-        photos: true,
-        bio: true,
-        familyValues: true,
-        familyType: true,
-        familyStatus: true,
-        aboutFamily: true,
-        isVerified: true,
-        isPremium: true,
-        isActive: true,
-        emailVerified: true,
-        phoneVerified: true,
-        photosVerified: true,
-        raasi: true,
-        natchathiram: true,
-        dhosam: true,
-        birthDate: true,
-        birthTime: true,
-        birthPlace: true,
-        fatherName: true,
-        fatherOccupation: true,
-        fatherCaste: true,
-        motherName: true,
-        motherOccupation: true,
-        motherCaste: true,
-        subscriptionTier: true,
-        successFee: true,
-        subscriptionStart: true,
-        subscriptionEnd: true,
-        manualVerificationStatus: true,
-        profileVerificationStatus: true,
-        profileVerified: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
-    
-    console.log(`[DEBUG getAllUsers] Raw query returned ${users.length} users`);
-    
-    const total = await prisma.user.count({ where });
-    
-    console.log(`[DEBUG getAllUsers] Total count: ${total}`);
-    console.log(`[DEBUG getAllUsers] Sending response with ${users.length} users, total: ${total}`);
-    
-    const responseData = {
+    res.json({
       users,
       pagination: {
         page: parseInt(page),
@@ -430,23 +362,12 @@ const getAllUsers = async (req, res) => {
         total,
         pages: Math.ceil(total / limit)
       }
-    };
-    
-    console.log(`[DEBUG getAllUsers] Response structure:`, {
-      hasUsers: !!responseData.users,
-      usersLength: responseData.users?.length,
-      pagination: responseData.pagination
     });
-    
-    res.json(responseData);
-    
-    // Log the activity
-    if (users.length > 0) {
-      // Log the activity to both tables
-      await logAdminActivityToBothTables({
-        adminId,
-        action: 'VIEW_USER_LIST',
-        details: {
+  } catch (error) {
+    console.error('getAllUsers error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+};
           page,
           limit,
           search: search || 'none',
@@ -591,39 +512,23 @@ const getUserDetails = async (req, res) => {
 
 const getDashboardStats = async (req, res) => {
   try {
-    console.log('[DEBUG getDashboardStats] Starting...');
-    console.log('[DEBUG getDashboardStats] DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    const totalUsers = await prisma.user.count();
-    console.log('[DEBUG getDashboardStats] totalUsers:', totalUsers);
+    const [totalUsers, verifiedUsers, pendingPhotoVerifications, newUsersToday] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { isVerified: true } }),
+      prisma.photoVerification.count({ where: { status: 'PENDING' } }),
+      prisma.user.count({ where: { createdAt: { gte: today } } })
+    ]);
     
-    const verifiedUsers = await prisma.user.count({ where: { isVerified: true } });
-    console.log('[DEBUG getDashboardStats] verifiedUsers:', verifiedUsers);
-    
-    const pendingPhotoVerifications = await prisma.photoVerification.count({ 
-      where: { status: 'PENDING' } 
-    });
-    console.log('[DEBUG getDashboardStats] pendingPhotoVerifications:', pendingPhotoVerifications);
-    
-    const newUsersToday = await prisma.user.count({
-      where: {
-        createdAt: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0))
-        }
-      }
-    });
-    console.log('[DEBUG getDashboardStats] newUsersToday:', newUsersToday);
-    
-    const response = {
+    res.json({
       totalUsers,
       verifiedUsers,
       pendingPhotoVerifications,
       newUsersToday,
       verificationRate: totalUsers > 0 ? Math.round((verifiedUsers / totalUsers) * 100) : 0
-    };
-    console.log('[DEBUG getDashboardStats] Sending response:', response);
-    
-    res.json(response);
+    });
   } catch (error) {
     console.error('Get dashboard stats error:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
