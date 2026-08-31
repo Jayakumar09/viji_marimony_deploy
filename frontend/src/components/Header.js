@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppBar, Toolbar, Typography, Button, Box, IconButton, Menu, MenuItem, Badge, Chip, Divider } from '@mui/material';
-import { AccountCircle, Search, Message, FavoriteBorder, Verified, AdminPanelSettings, WorkspacePremium, Star, Upgrade, Home, Info, ContactMail } from '@mui/icons-material';
+import { AccountCircle, Search, Message, FavoriteBorder, Verified, AdminPanelSettings, WorkspacePremium, Star, Upgrade, Home, Info, ContactMail, AutoFix, Whatshot } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { normalizeTier, getTierBadgeColor, getTierDisplayName, canUpgrade, isPaidTier, TIER_VALUES } from '../utils/subscription';
@@ -97,55 +97,51 @@ const Header = () => {
                 color: subscriptionTier === 'FREE' ? '#fff' : '#000',
                 fontWeight: 'bold'
               }}
-            />
-            {/* Show Upgrade button for users who can upgrade (not ELITE) */}
-            {canUpgrade(subscriptionTier) && (
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<Upgrade />}
-                onClick={() => navigate('/subscription')}
-                style={{ 
-                  backgroundColor: '#FFD700',
-                  color: '#000',
-                  fontWeight: 'bold'
-                }}
-              >
-                Upgrade
+             />
+             
+             <Button 
+               color="inherit" 
+               startIcon={<Search />}
+               onClick={() => navigate('/matches')}
+               style={{ backgroundColor: isActive('/matches') ? 'rgba(255,255,255,0.2)' : 'transparent' }}
+             >
+               AI Matches
+             </Button>
+             <Button 
+               color="inherit" 
+               startIcon={<AutoFix />}
+               onClick={() => navigate('/ai-profile')}
+               style={{ backgroundColor: isActive('/ai-profile') ? 'rgba(255,255,255,0.2)' : 'transparent' }}
+             >
+               AI Profile
               </Button>
+
+              <Button 
+                color="inherit" 
+                startIcon={<AutoFix />}
+                onClick={() => navigate('/ai-profile')}
+                style={{ backgroundColor: isActive('/ai-profile') ? 'rgba(255,255,255,0.2)' : 'transparent' }}
+              >
+                AI Profile
+              </Button>
+              <Button 
+                color="inherit" 
+                startIcon={<Message />}
+                onClick={() => navigate('/messages')}
+                style={{ backgroundColor: isActive('/messages') ? 'rgba(255,255,255,0.2)' : 'transparent' }}
+              >
+                Messages
+              </Button>
+              
+              <IconButton 
+                color="inherit" 
+                onClick={handleMenuOpen}
+                style={{ backgroundColor: anchorEl ? 'rgba(255,255,255,0.2)' : 'transparent' }}
+              >
+                <AccountCircle />
+              </IconButton>
+            </Box>
             )}
-            <Button 
-              color="inherit" 
-              startIcon={<Search />}
-              onClick={() => navigate('/search')}
-              style={{ backgroundColor: isActive('/search') ? 'rgba(255,255,255,0.2)' : 'transparent' }}
-            >
-              Search
-            </Button>
-            <Button 
-              color="inherit" 
-              startIcon={<FavoriteBorder />}
-              onClick={() => navigate('/interests')}
-              style={{ backgroundColor: isActive('/interests') ? 'rgba(255,255,255,0.2)' : 'transparent' }}
-            >
-              Interests
-            </Button>
-            <Button 
-              color="inherit" 
-              startIcon={<Message />}
-              onClick={() => navigate('/messages')}
-              style={{ backgroundColor: isActive('/messages') ? 'rgba(255,255,255,0.2)' : 'transparent' }}
-            >
-              Messages
-            </Button>
-            
-            <IconButton 
-              color="inherit" 
-              onClick={handleMenuOpen}
-              style={{ backgroundColor: anchorEl ? 'rgba(255,255,255,0.2)' : 'transparent' }}
-            >
-              <AccountCircle />
-            </IconButton>
             <Menu
               anchorEl={anchorEl}
               keepMounted
@@ -169,10 +165,18 @@ const Header = () => {
               <MenuItem onClick={() => { navigate('/dashboard'); handleMenuClose(); }}>
                 Dashboard
               </MenuItem>
-              <MenuItem onClick={() => { navigate('/profile'); handleMenuClose(); }}>
-                My Profile
-              </MenuItem>
-              <MenuItem onClick={() => { navigate('/verification'); handleMenuClose(); }}>
+               <MenuItem onClick={() => { navigate('/profile'); handleMenuClose(); }}>
+                 My Profile
+               </MenuItem>
+               <MenuItem onClick={() => { navigate('/ai-profile'); handleMenuClose(); }}>
+                 <AutoFix fontSize="small" style={{ marginRight: 8 }} />
+                 AI Profile
+               </MenuItem>
+               <MenuItem onClick={() => { navigate('/matches'); handleMenuClose(); }}>
+                 <Whatshot fontSize="small" style={{ marginRight: 8 }} />
+                 AI Matches
+               </MenuItem>
+               <MenuItem onClick={() => { navigate('/verification'); handleMenuClose(); }}>
                 <Verified fontSize="small" style={{ marginRight: 8 }} />
                 Verification
               </MenuItem>

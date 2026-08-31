@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const { hasPremiumAccess } = require('../middleware/premiumAccess');
+const { moderateContent } = require('../middleware/contentModeration');
 
 // Check if Cloudinary is configured
 const isCloudinaryConfigured = () => {
@@ -78,13 +80,63 @@ const chatUpload = multer({
 });
 
 // User sends message to admin
+// Check if users can chat (have accepted interest OR premium subscription)
+async function canChat(senderId, receiverId) {
+  try {
+    // Check for accepted interest
+    const acceptedInterest = await prisma.interest.findFirst({
+      where: {
+        OR: [
+          { senderId: senderId, receiverId: receiverId, status: 'ACCEPTED' },
+          { senderId: receiverId, receiverId: senderId, status: 'ACCEPTED' }
+        ]
+      }
+    });
+
+    if (acceptedInterest) {
+      return { canChat: true, reason: 'accepted_interest', interest: acceptedInterest };
+    }
+
+    // Check for active premium subscription for sender
+    const now = new Date();
+    const activeSubscription = await prisma.subscription.findFirst({
+      where: {
+        userId: senderId,
+        status: 'ACTIVE',
+        endDate: { gte: now }
+      }
+    });
+
+    if (activeSubscription) {
+      return { canChat: true, reason: 'premium_subscription', subscription: activeSubscription };
+    }
+
+    return { canChat: false, reason: 'no_access' };
+  } catch (error) {
+    console.error('Can chat check error:', error);
+    return { canChat: false, reason: 'error' };
+  }
+}
+
+// User sends message to admin
 const sendUserMessage = async (req, res) => {
   try {
-    const { message, messageType } = req.body;
-    const userId = req.user.id;
-    const isImage = messageType === 'image' || req.file;
+  const { message, messageType } = req.body;
+  const userId = req.user.id;
+  const isImage = messageType === 'image' || req.file;
 
-    // Check if it's an image message
+  // If it's a text message, run moderation
+  if (!isImage && message && message.trim()) {
+    const moderation = moderateContent(message.trim());
+    if (!moderation.isClean && moderation.severity === 'high') {
+      return res.status(400).json({ 
+        error: 'Message contains inappropriate content',
+        message: 'Please revise your message'
+      });
+    }
+  }
+
+  // Check if it's an image message
     if (isImage) {
       if (!req.file) {
         return res.status(400).json({ error: 'Image file is required for image messages' });
@@ -130,6 +182,263 @@ const sendUserMessage = async (req, res) => {
 
   } catch (error) {
     console.error('Send user chat message error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// User sends message to another user (requires premium or accepted interest)
+const sendUserToUserMessage = async (req, res) => {
+  try {
+    const { receiverId, message, messageType } = req.body;
+    const senderId = req.user.id;
+
+    if (!receiverId) {
+      return res.status(400).json({ error: 'Receiver ID is required' });
+    }
+
+    // Check if sender and receiver are the same
+    if (senderId === receiverId) {
+      return res.status(400).json({ error: 'Cannot send message to yourself' });
+    }
+
+    // Verify receiver exists and is active
+    const receiver = await prisma.user.findUnique({
+      where: { id: receiverId },
+      select: { id: true, isActive: true }
+    });
+
+    if (!receiver || !receiver.isActive) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if users can chat (premium or accepted interest)
+    const chatAccess = await canChat(senderId, receiverId);
+    if (!chatAccess.canChat) {
+      return res.status(403).json({
+        error: 'Chat access denied',
+        message: 'You need a premium subscription or accepted interest to chat with this user.',
+        upgradeUrl: '/subscription'
+      });
+    }
+
+    const isImage = messageType === 'image' || req.file;
+
+    // If it's a text message, run moderation
+    if (!isImage && message && message.trim()) {
+      const moderation = moderateContent(message.trim());
+      if (!moderation.isClean && moderation.severity === 'high') {
+        return res.status(400).json({ 
+          error: 'Message contains inappropriate content',
+          message: 'Please revise your message'
+        });
+      }
+    }
+
+    // Check if it's an image message
+    if (isImage) {
+      if (!req.file) {
+        return res.status(400).json({ error: 'Image file is required for image messages' });
+      }
+      
+      const imageUrl = (isCloudinaryConfigured() && req.file?.path) ? req.file.path : `/uploads/chat/${req.file.filename}`;
+      
+      const chatMessage = await prisma.message.create({
+        data: {
+          senderId,
+          receiverId,
+          content: imageUrl,
+          messageType: 'image',
+          isRead: false
+        }
+      });
+
+      return res.status(201).json({
+        message: 'Image sent successfully',
+        data: chatMessage
+      });
+    }
+
+    // Text message
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    const chatMessage = await prisma.message.create({
+      data: {
+        senderId,
+        receiverId,
+        content: message.trim(),
+        messageType: 'text',
+        isRead: false
+      }
+    });
+
+    res.status(201).json({
+      message: 'Message sent successfully',
+      data: chatMessage
+    });
+
+  } catch (error) {
+    console.error('Send user-to-user message error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// User gets chat with another user
+const getUserChatWithUser = async (req, res) => {
+  try {
+    const { receiverId } = req.params;
+    const userId = req.user.id;
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Verify other user exists
+    const otherUser = await prisma.user.findUnique({
+      where: { id: receiverId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        profilePhoto: true
+      }
+    });
+
+    if (!otherUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const [messages, totalCount] = await Promise.all([
+      prisma.message.findMany({
+        where: {
+          OR: [
+            { senderId: userId, receiverId },
+            { senderId: receiverId, receiverId: userId }
+          ]
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit)
+      }),
+      prisma.message.count({
+        where: {
+          OR: [
+            { senderId: userId, receiverId },
+            { senderId: receiverId, receiverId: userId }
+          ]
+        }
+      })
+    ]);
+
+    // Mark messages as read
+    await prisma.message.updateMany({
+      where: {
+        senderId: receiverId,
+        receiverId: userId,
+        isRead: false
+      },
+      data: {
+        isRead: true,
+        readAt: new Date()
+      }
+    });
+
+    res.json({
+      user: otherUser,
+      messages: messages.reverse(),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        totalMessages: totalCount,
+        hasNext: skip + messages.length < totalCount,
+        hasPrev: parseInt(page) > 1
+      }
+    });
+
+  } catch (error) {
+    console.error('Get user chat with user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Get user's chat conversations list
+const getUserChats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all users who have exchanged messages
+    const messages = await prisma.message.findMany({
+      where: {
+        OR: [
+          { senderId: userId },
+          { receiverId: userId }
+        ]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Group by conversation partner
+    const conversationMap = new Map();
+    const userIds = new Set();
+
+    for (const msg of messages) {
+      const partnerId = msg.senderId === userId ? msg.receiverId : msg.senderId;
+      if (!conversationMap.has(partnerId)) {
+        conversationMap.set(partnerId, {
+          lastMessage: msg.content,
+          lastMessageTime: msg.createdAt,
+          lastMessageIsRead: msg.isRead,
+          messageCount: 0,
+          unreadCount: 0
+        });
+        userIds.add(partnerId);
+      }
+      const conv = conversationMap.get(partnerId);
+      conv.messageCount++;
+      if (msg.senderId !== userId && !msg.isRead) {
+        conv.unreadCount++;
+      }
+    }
+
+    // Fetch user details
+    const users = await prisma.user.findMany({
+      where: { id: { in: Array.from(userIds) } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        profilePhoto: true
+      }
+    });
+
+    const conversations = users.map(user => ({
+      user,
+      ...conversationMap.get(user.id)
+    })).sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+
+    res.json({ conversations });
+
+  } catch (error) {
+    console.error('Get user chats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Get unread message count
+const getUserUnreadCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const unreadCount = await prisma.message.count({
+      where: {
+        receiverId: userId,
+        isRead: false
+      }
+    });
+
+    res.json({ unreadCount });
+
+  } catch (error) {
+    console.error('Get unread count error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -388,30 +697,7 @@ const getAdminChatWithUser = async (req, res) => {
     console.error('Get admin chat with user error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
-};
-
-// Get unread message count for user
-const getUserUnreadCount = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const unreadCount = await prisma.chatMessage.count({
-      where: {
-        userId,
-        senderType: 'ADMIN',
-        isRead: false
-      }
-    });
-
-    res.json({ unreadCount });
-
-  } catch (error) {
-    console.error('Get user unread count error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-// Get total unread count for admin (from all users)
+}
 const getAdminUnreadCount = async (req, res) => {
   try {
     const unreadCount = await prisma.chatMessage.count({
@@ -548,16 +834,50 @@ const deleteMessage = async (req, res) => {
   }
 };
 
+// Check chat access for a user
+const checkChatAccess = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const { targetUserId } = req.params;
+
+    const access = await canChat(req.user.id, targetUserId);
+
+    res.json({
+      success: true,
+      data: {
+        canChat: access.canChat,
+        accessType: access.type || 'none',
+        subscription: access.subscription || null,
+        interest: access.interest || null
+      }
+    });
+  } catch (error) {
+    console.error('Check chat access error:', error);
+    res.status(500).json({
+      error: 'Failed to check access',
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   chatUpload,
   sendUserMessage,
   sendAdminMessage,
+  sendUserToUserMessage,
   getUserChat,
+  getUserChatWithUser,
+  getUserChats,
   getAdminChats,
   getAdminChatWithUser,
   getUserUnreadCount,
   getAdminUnreadCount,
   markAsRead,
   startChat,
-  deleteMessage
+  deleteMessage,
+  canChat,
+  checkChatAccess
 };

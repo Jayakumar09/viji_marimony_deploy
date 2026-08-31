@@ -120,8 +120,19 @@ const getReceivedInterests = async (req, res) => {
       prisma.interest.count({ where })
     ]);
 
+    // Fetch profile details for each sender
+    const interestsWithProfiles = await Promise.all(interests.map(async (interest) => {
+      const profile = await prisma.profile.findUnique({
+        where: { userId: interest.senderId }
+      });
+      return {
+        ...interest,
+        senderProfile: profile
+      };
+    }));
+
     res.json({
-      interests,
+      interests: interestsWithProfiles,
       pagination: {
         currentPage: parseInt(page),
         totalPages: Math.ceil(totalCount / parseInt(limit)),

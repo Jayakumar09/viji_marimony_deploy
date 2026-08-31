@@ -7,8 +7,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -68,42 +68,22 @@ model User {
   birthDate         String?  @map("birth_date") // Birth date for horoscope
   birthTime         String?  @map("birth_time") // Birth time for horoscope
   birthPlace        String?  @map("birth_place") // Birth place for horoscope
-
-  // Family Background Fields
-  fatherName        String?  @map("father_name")
-  fatherOccupation  String?  @map("father_occupation")
-  fatherCaste       String?  @map("father_caste")
-  motherName        String?  @map("mother_name")
-  motherOccupation  String?  @map("mother_occupation")
-  motherCaste       String?  @map("mother_caste")
-
-  // Subscription Fields
-  subscriptionTier   String?  @map("subscription_tier") // FREE, STANDARD, PREMIUM, ELITE
-  successFee        Float?   @map("success_fee") // Success fee for premium services
-  subscriptionStart DateTime? @map("subscription_start")
-  subscriptionEnd   DateTime? @map("subscription_end")
-
-  // Verification Status
-  manualVerificationStatus String?  @map("manual_verification_status") // PENDING, APPROVED, REJECTED
-  manualVerificationNotes String?  @map("manual_verification_notes")
-  
-  // Profile Verification Status (for email + phone verification workflow)
-  profileVerificationStatus String? @default("Pending") @map("profile_verification_status") // Pending, Under Admin Review, Profile Verified, Rejected
-  profileVerified Boolean @default(false) @map("profile_verified") // Set by admin after review
+  profileId         String?  @unique @map("profile_id")
 
   // Relations
+  profile           Profile?   @relation("UserProfile", fields: [profileId], references: [id])
   sentInterests     Interest[] @relation("SentInterests")
   receivedInterests Interest[] @relation("ReceivedInterests")
   sentMessages      Message[]  @relation("SentMessages")
   receivedMessages  Message[] @relation("ReceivedMessages")
   photoVerifications PhotoVerification[] @relation("UserPhotos")
   documents         Document[] @relation("UserDocuments")
-  subscriptions     Subscription[] @relation("UserSubscriptions")
   userPhotos        UserPhoto[] @relation("UserProfilePhotos")
   userGallery       UserGalleryImage[] @relation("UserGallery")
   userDocuments     UserDocument[] @relation("UserNewDocuments")
   verifications     Verification[] @relation("UserVerifications")
   payments          Payments[] @relation("UserPayments")
+  subscriptions     Subscription[] @relation("UserSubscriptions")
 
   @@index([createdAt])
   @@index([isVerified])
@@ -345,8 +325,8 @@ model SubCaste {
   @@map("sub_castes")
 }
 
-// Rasi and Natchathiram mapping for horoscope
-model RasiNakshatra {
+  // Rasi and Natchathiram mapping for horoscope
+  model RasiNakshatra {
   id        String   @id @default(cuid())
   rasi      String
   nakshatra String   @unique
@@ -356,8 +336,36 @@ model RasiNakshatra {
   @@map("rasi_nakshatras")
 }
 
-// Admin Activity Log for audit trail
-model AdminActivityLog {
+  // AI Profiles Model - stores AI-generated profile enhancements and detailed match data
+  model Profile {
+    id            String   @id @default(cuid())
+    userId        String   @unique @map("user_id")
+    gender        String
+    dob           DateTime @map("date_of_birth")
+    age           Int
+    religion      String
+    caste         String
+    motherTongue  String   @map("mother_tongue")
+    maritalStatus String   @map("marital_status")
+    education     String
+    occupation    String
+    income        String?
+    location      String
+    aboutMe       String?  @map("about_me")
+    partnerPreferences String? @map("partner_preferences")
+    photoUrls     String?  @map("photo_urls")
+    isVerified    Boolean  @default(false) @map("is_verified")
+    createdAt     DateTime @default(now()) @map("created_at")
+    updatedAt     DateTime @updatedAt @map("updated_at")
+
+    // Relations
+    user          User?     @relation("UserProfile")
+
+    @@map("profiles")
+  }
+
+  // Admin Activity Log for audit trail
+  model AdminActivityLog {
   id          String   @id @default(cuid())
   adminId     String   @map("admin_id")
   action      String

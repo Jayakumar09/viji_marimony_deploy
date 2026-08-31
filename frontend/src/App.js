@@ -25,6 +25,8 @@ import TestPDF from './TestPDF';
 import Terms from './pages/Terms';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import Matches from './pages/Matches';
+import AIProfile from './pages/AIProfile';
 
 // Context/Hooks
 import { useAuth } from './hooks/useAuth';
@@ -60,6 +62,8 @@ function App() {
           <Route path="/interests" element={user ? <Interests /> : <Navigate to="/login" />} />
           <Route path="/subscription" element={user ? <ManualPayment /> : <Navigate to="/login" />} />
           <Route path="/chat" element={user ? <UserChat /> : <Navigate to="/login" />} />
+          <Route path="/matches" element={user ? <Matches /> : <Navigate to="/login" />} />
+          <Route path="/ai-profile" element={user ? <AIProfile /> : <Navigate to="/login" />} />
 
           {/* Admin Routes */}
           <Route path="/admin/*" element={<AdminPanel />} />
